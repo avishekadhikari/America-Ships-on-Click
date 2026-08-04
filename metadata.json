@@ -1,0 +1,6 @@
+{
+  "name": "America Ships On Click",
+  "description": "No-broker freight load board with a public Open Books settlement ledger, direct booking, and transparent financial reporting.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,134 @@
+# Entity Relationship Diagram (ERD) - America Ships On Click
+
+This document describes the PostgreSQL database architecture for **America Ships On Click**.
+
+## Database Overview
+
+The schema enforces strict financial history preservation via `ON DELETE RESTRICT` constraints on settlements and bookings.
+
+### Views:
+- **`public_ledger_view`**: Joined view for public settlement data without exposing driver or shipper identity.
+- **`settlement_totals_view`**: Aggregate materialized view computing real-time count, total miles, gross, fee, fuel cost, factor cost, and net amount paid to carriers directly from DB rows (never incremented counters).
+
+## Mermaid Diagram
+
+```mermaid
+erDiagram
+    users ||--o| driver_profiles : "1:1"
+    users ||--o| shipper_profiles : "1:1"
+    
+    driver_profiles ||--o{ driver_documents : "1:N"
+    driver_profiles ||--o{ driver_equipment : "1:N"
+    driver_profiles ||--o| driver_payment_accounts : "1:1"
+    driver_profiles ||--o{ bookings : "1:N"
+    
+    shipper_profiles ||--o{ loads : "1:N"
+    
+    loads ||--o{ bookings : "1:N"
+    loads ||--o{ settlements : "1:N"
+    
+    bookings ||--o| settlements : "1:1"
+
+    users {
+        string id PK
+        enum role "driver | shipper | admin"
+        string email UK
+        string phone
+        string password_hash
+        timestamp created_at
+    }
+
+    driver_profiles {
+        string id PK
+        string user_id FK,UK
+        string full_name
+        string home_base_city
+        string home_base_state
+        string cdl_number
+        enum cdl_class "A | B"
+        string dot_number
+        string mc_number
+        enum verification_status "pending | verified | rejected"
+    }
+
+    driver_documents {
+        string id PK
+        string driver_id FK
+        enum doc_type "cdl_photo | dot_authority | coi | pod"
+        string file_url
+        timestamp uploaded_at
+        boolean verified
+    }
+
+    driver_equipment {
+        string id PK
+        string driver_id FK
+        enum equipment_type "dry_van | reefer | flatbed | step_deck | power_only"
+        int trailer_length_ft
+    }
+
+    driver_payment_accounts {
+        string id PK
+        string driver_id FK,UK
+        string payment_processor
+        string processor_account_id "Tokenized reference"
+        boolean same_day_funding_opt_in
+    }
+
+    shipper_profiles {
+        string id PK
+        string user_id FK,UK
+        string company_name
+        string billing_email
+    }
+
+    loads {
+        string id PK
+        string shipper_id FK
+        string origin_city
+        string origin_state
+        string dest_city
+        string dest_state
+        numeric miles
+        numeric rate_per_mile
+        enum equipment_type
+        string pickup_date
+        numeric weight_lbs
+        string notes
+        boolean same_day_funding_offered
+        enum status "open | booked | in_transit | delivered | cancelled"
+    }
+
+    bookings {
+        string id PK
+        string load_id FK
+        string driver_id FK
+        timestamp booked_at
+        enum status "active | completed | cancelled"
+        string pod_url
+        timestamp delivered_at
+    }
+
+    settlements {
+        string id PK
+        string booking_id FK,UK
+        string load_id FK
+        numeric miles
+        numeric rate_per_mile
+        numeric fuel_rate_per_mile
+        numeric gross_amount
+        numeric fee_amount
+        numeric fee_pct_applied
+        numeric fuel_cost
+        numeric factor_cost
+        boolean factored
+        numeric net_amount
+        timestamp settled_at
+    }
+
+    platform_config {
+        string key PK
+        numeric value
+        timestamp updated_at
+    }
+```
