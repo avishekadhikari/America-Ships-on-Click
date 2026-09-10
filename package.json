@@ -4,11 +4,21 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx server.ts",
-    "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "dev": "tsx backend/server.ts",
+    "build": "vite build && esbuild backend/server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs && cp -r database/migrations dist/migrations",
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "db:up": "./database/scripts/postgres-dev.sh up",
+    "db:down": "./database/scripts/postgres-dev.sh down",
+    "db:psql": "./database/scripts/postgres-dev.sh psql",
+    "db:destroy": "./database/scripts/postgres-dev.sh destroy",
+    "db:export": "./database/scripts/export-sql.sh",
+    "lint": "tsc --noEmit",
+    "db:migrate": "tsx database/cli.ts migrate",
+    "db:seed": "tsx database/cli.ts seed",
+    "db:status": "tsx database/cli.ts status",
+    "db:reset": "tsx database/cli.ts reset",
+    "db:ping": "tsx database/cli.ts ping"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.4",

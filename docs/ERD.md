@@ -8,7 +8,7 @@ The schema enforces strict financial history preservation via `ON DELETE RESTRIC
 
 ### Views:
 - **`public_ledger_view`**: Joined view for public settlement data without exposing driver or shipper identity.
-- **`settlement_totals_view`**: Aggregate materialized view computing real-time count, total miles, gross, fee, fuel cost, factor cost, and net amount paid to carriers directly from DB rows (never incremented counters).
+- **`settlement_totals_view`**: Plain (non-materialized) aggregate view computing real-time count, total miles, gross, fee, fuel cost, factor cost, and net amount paid to carriers directly from DB rows (never incremented counters).
 
 ## Mermaid Diagram
 
