@@ -40,9 +40,10 @@ Error: Cannot find module '/opt/render/project/src/dist/server.cjs'
 ```
 
 Set **Build Command** to `npm ci && npm run build` and **Start Command** to
-`npm start`. `npm start` will run the build itself if `dist/server.cjs` is
-missing, so a host that only runs start still boots. Prefer a real build step
-so cold starts do not compile the app.
+`npm start`. If Build Command is left empty, `postinstall` still compiles on
+Render (`RENDER=true`) during install — before start — so the process can bind
+`$PORT` immediately. Do not compile in `npm start`: Render sends SIGTERM if no
+port is open while Vite is still running.
 
 A Blueprint first deploy can still fail at boot. That is expected: `DATABASE_URL`
 is not set yet, and the role it points to does not exist. Steps 2–4 fix that.
