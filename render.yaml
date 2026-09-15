@@ -25,6 +25,8 @@ services:
     runtime: node
     plan: starter
     region: oregon
+    # Vite and esbuild are production dependencies so this build works even
+    # when NODE_ENV=production skips devDependencies.
     buildCommand: npm ci && npm run build
     startCommand: npm start
     healthCheckPath: /api/health

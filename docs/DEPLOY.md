@@ -32,8 +32,20 @@ the runtime role so this does not happen.
 Render → **New → Blueprint** → pick this repo. It reads `render.yaml` and
 creates the web service plus a PostgreSQL 16 instance.
 
-The first deploy will fail at boot. That is expected: `DATABASE_URL` is not set
-yet, and the role it points to does not exist. Steps 2–4 fix that.
+If you created a **Web Service** by hand instead of this Blueprint, Render
+defaults to `npm start` with no build. That crashes immediately:
+
+```
+Error: Cannot find module '/opt/render/project/src/dist/server.cjs'
+```
+
+Set **Build Command** to `npm ci && npm run build` and **Start Command** to
+`npm start`. `npm start` will run the build itself if `dist/server.cjs` is
+missing, so a host that only runs start still boots. Prefer a real build step
+so cold starts do not compile the app.
+
+A Blueprint first deploy can still fail at boot. That is expected: `DATABASE_URL`
+is not set yet, and the role it points to does not exist. Steps 2–4 fix that.
 
 ## 2. Set `ADMIN_PASSWORD`
 
