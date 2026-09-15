@@ -24,6 +24,7 @@ export const Footer: React.FC<FooterProps> = ({ setActiveTab, feePct = 0.05 }) =
             </h4>
             <ul className="list-none p-0 m-0 space-y-2 font-mono text-xs">
               <li><button onClick={() => setActiveTab('loads')} className="bg-transparent border-none p-0 text-[#F0EAD8]/80 hover:text-[#E3A008] hover:underline cursor-pointer">Find Loads</button></li>
+              <li><button onClick={() => setActiveTab('vvip')} className="bg-transparent border-none p-0 text-[#E3A008]/90 hover:text-[#E3A008] hover:underline cursor-pointer">Golden VVIP</button></li>
               <li><button onClick={() => setActiveTab('books')} className="bg-transparent border-none p-0 text-[#F0EAD8]/80 hover:text-[#E3A008] hover:underline cursor-pointer">Open Books Ledger</button></li>
               <li><button onClick={() => setActiveTab('dashboard')} className="bg-transparent border-none p-0 text-[#F0EAD8]/80 hover:text-[#E3A008] hover:underline cursor-pointer">Dashboard</button></li>
             </ul>
