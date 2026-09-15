@@ -93,7 +93,7 @@ export const FindLoads: React.FC<FindLoadsProps> = ({ currentUser, onOpenAuth, s
 
   return (
     <div className="py-12 bg-[#F0EAD8] text-[#14171A]">
-      <div className="max-w-[1180px] mx-auto px-6">
+      <div className="max-w-295 mx-auto px-6">
         <span className="eyebrow block mb-1">Find Freight</span>
         <h2 className="text-3xl sm:text-4xl mb-2">Available Load Board</h2>
         <p className="text-[#5B6168] font-sans text-xs sm:text-sm mb-8">

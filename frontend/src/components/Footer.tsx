@@ -8,7 +8,7 @@ interface FooterProps {
 export const Footer: React.FC<FooterProps> = ({ setActiveTab, feePct = 0.05 }) => {
   return (
     <footer className="bg-[#14171A] text-[#F0EAD8] py-12 text-[0.85rem] border-t-4 border-[#14171A]">
-      <div className="max-w-[1180px] mx-auto px-6">
+      <div className="max-w-295 mx-auto px-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8 mb-8">
           <div>
             <h4 className="text-[#E3A008] font-serif font-black text-sm tracking-widest uppercase mb-3">

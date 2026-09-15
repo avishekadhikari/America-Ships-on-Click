@@ -220,7 +220,7 @@ export const Home: React.FC<HomeProps> = ({ setActiveTab }) => {
       </section>
 
       <section className="py-16 border-b-2 border-[#14171A] bg-[#FAFAF7]">
-        <div className="max-w-[1180px] mx-auto px-6">
+        <div className="max-w-295 mx-auto px-6">
           <div className="max-w-2xl mx-auto text-center mb-10">
             <span className="eyebrow block mb-1">The Financial Math</span>
             <h2 className="text-3xl sm:text-4xl mb-3">Same load. Two ways to get paid.</h2>
@@ -278,7 +278,7 @@ export const Home: React.FC<HomeProps> = ({ setActiveTab }) => {
       </section>
 
       <section className="py-16 bg-[#F0EAD8]">
-        <div className="max-w-[1180px] mx-auto px-6">
+        <div className="max-w-295 mx-auto px-6">
           <div className="max-w-2xl mx-auto text-center mb-10">
             <span className="eyebrow block mb-1">How It Works</span>
             <h2 className="text-3xl sm:text-4xl">Three steps. No dispatcher in the middle.</h2>

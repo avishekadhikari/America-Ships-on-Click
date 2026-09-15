@@ -318,7 +318,7 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
 
   return (
     <div className="py-12 bg-[#F0EAD8] text-[#14171A]">
-      <div className="max-w-[760px] mx-auto px-6">
+      <div className="max-w-190 mx-auto px-6">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
           <span className="eyebrow block">Drive With Us</span>
           <span className="stamp text-[0.78rem] border-[#0F5132] text-[#0F5132]">

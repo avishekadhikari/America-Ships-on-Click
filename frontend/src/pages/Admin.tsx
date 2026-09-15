@@ -66,7 +66,7 @@ export const Admin: React.FC<AdminProps> = ({ currentUser, onOpenAuth, onSwitchR
   return (
     <>
       <Dashboard currentUser={currentUser} onOpenAuth={onOpenAuth} onSwitchRole={onSwitchRole} />
-      <div className="max-w-[1180px] mx-auto px-6 pb-16">
+      <div className="max-w-295 mx-auto px-6 pb-16">
         <RateCardsAdmin />
       </div>
     </>

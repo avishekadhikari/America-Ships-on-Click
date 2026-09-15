@@ -50,7 +50,7 @@ export const OpenBooks: React.FC = () => {
 
   return (
     <div className="py-12 bg-[#F0EAD8] text-[#14171A]">
-      <div className="max-w-[1180px] mx-auto px-6">
+      <div className="max-w-295 mx-auto px-6">
         <div className="flex flex-wrap items-center gap-4 mb-3">
           <span className="eyebrow">Public Financial Ledger</span>
           <span className="stamp">OPEN BOOKS · LIVE SSE</span>

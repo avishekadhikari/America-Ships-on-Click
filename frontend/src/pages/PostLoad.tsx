@@ -152,7 +152,7 @@ export const PostLoad: React.FC<PostLoadProps> = ({ currentUser, onOpenAuth, set
 
   return (
     <div className="py-12">
-      <div className="max-w-[1180px] mx-auto px-6">
+      <div className="max-w-295 mx-auto px-6">
         <span className="eyebrow block mb-1">Shipper Portal</span>
         <h2 className="text-2xl sm:text-3xl mb-2">Post a New Freight Load</h2>
         <p className="text-[#5B6168] mb-8">

@@ -110,7 +110,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentUser, onOpenAuth, o
 
   return (
     <div className="py-12">
-      <div className="max-w-[1180px] mx-auto px-6">
+      <div className="max-w-295 mx-auto px-6">
         <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
           <div>
             <div className="flex items-center gap-2 mb-1">
