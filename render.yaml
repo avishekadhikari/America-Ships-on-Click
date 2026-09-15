@@ -1,0 +1,69 @@
+# Render Blueprint — America Ships On Click
+#
+# The app is an Express server (dist/server.cjs) that also serves the built
+# SPA, so deep links like /vvip and the /api routes come from one process.
+# Static hosting cannot run it.
+#
+# Two database roles, matching database/scripts/postgres-dev.sh:
+#   DATABASE_ADMIN_URL  owner  — migrations only
+#   DATABASE_URL        asoc_app — runtime, subject to Row-Level Security
+#
+# RLS is enabled but NOT forced (pg_class.relforcerowsecurity = false), so the
+# owner role bypasses every policy. Pointing DATABASE_URL at the owner would
+# silently void the security model. See docs/DEPLOY.md step 3 before deploying.
+
+databases:
+  - name: asoc-postgres
+    databaseName: asoc
+    user: asoc
+    postgresMajorVersion: "16"
+    plan: basic-256mb
+
+services:
+  - type: web
+    name: america-ships-on-click
+    runtime: node
+    plan: starter
+    region: oregon
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # Owner connection: used only to run migrations at boot, under a
+      # pg_advisory_xact_lock so a rolling deploy migrates exactly once.
+      - key: DATABASE_ADMIN_URL
+        fromDatabase:
+          name: asoc-postgres
+          property: connectionString
+
+      # Runtime connection as the least-privilege asoc_app role.
+      # Set manually after running the role provisioning in docs/DEPLOY.md.
+      - key: DATABASE_URL
+        sync: false
+
+      # Behind Render's load balancer. Without this the rate limiter and the
+      # vvip_leads.ip_address column record the proxy's address, not the client's.
+      - key: TRUST_PROXY
+        value: "true"
+
+      # Generated once at creation and persisted across deploys. Rotating
+      # JWT_SECRET invalidates every issued token.
+      - key: JWT_SECRET
+        generateValue: true
+      - key: PAYMENT_TOKEN_SECRET
+        generateValue: true
+
+      - key: ADMIN_EMAIL
+        value: admin@americashipsonclick.com
+      # Set in the Render dashboard. Must be 8+ chars and not the demo password;
+      # the server refuses to start otherwise.
+      - key: ADMIN_PASSWORD
+        sync: false
+
+      # Demo seeding stays off in production.
+      - key: DB_SEED
+        value: "false"
