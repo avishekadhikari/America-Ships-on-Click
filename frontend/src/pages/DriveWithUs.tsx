@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { EquipmentType, User } from '../types/api';
 
@@ -32,6 +33,10 @@ function persistDraft(
 export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) => {
   const [step, setStep] = useState<number>(1);
   const [submitting, setSubmitting] = useState(false);
+  const { data: catalog } = useQuery({
+    queryKey: ['rates'],
+    queryFn: () => api.getRates()
+  });
 
   // Credentials live outside formData on purpose: formData is mirrored into
   // localStorage as a resumable draft, and a password does not belong there.
@@ -713,11 +718,9 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
                     onChange={(e) => updateField('equipment_type', e.target.value as EquipmentType)}
                     className="w-full p-2.5 bg-[#F0EAD8] border-2 border-[#14171A] text-xs font-mono focus:outline-none focus:bg-white"
                   >
-                    <option value="dry_van">Dry Van (Standard Enclosed)</option>
-                    <option value="reefer">Reefer (Temperature Controlled)</option>
-                    <option value="flatbed">Flatbed (Open Equipment)</option>
-                    <option value="step_deck">Step Deck (Specialized Open)</option>
-                    <option value="power_only">Power Only (Tractor Unit)</option>
+                    {(catalog?.cards ?? []).map(c => (
+                      <option key={c.equipment_key} value={c.equipment_key}>{c.label}</option>
+                    ))}
                   </select>
                 </div>
 

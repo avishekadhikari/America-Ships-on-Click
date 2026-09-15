@@ -1,6 +1,7 @@
 import React from 'react';
 import { User } from '../types/api';
 import { Dashboard } from './Dashboard';
+import { RateCardsAdmin } from './RateCardsAdmin';
 
 interface AdminProps {
   currentUser: User | null;
@@ -62,5 +63,12 @@ export const Admin: React.FC<AdminProps> = ({ currentUser, onOpenAuth, onSwitchR
     );
   }
 
-  return <Dashboard currentUser={currentUser} onOpenAuth={onOpenAuth} onSwitchRole={onSwitchRole} />;
+  return (
+    <>
+      <Dashboard currentUser={currentUser} onOpenAuth={onOpenAuth} onSwitchRole={onSwitchRole} />
+      <div className="max-w-[1180px] mx-auto px-6 pb-16">
+        <RateCardsAdmin />
+      </div>
+    </>
+  );
 };

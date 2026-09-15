@@ -8,6 +8,8 @@ import { db, type SessionContext } from '../database';
 import { authenticate, generateToken, requireRole, AuthenticatedRequest } from './auth';
 import { accountLast4, clientIp, newId, sessionContextFor, tokenizeBankAccount } from './security';
 import { drivingRoute, reversePlace, searchPlaces } from './geo';
+import { cardFromRow, loadRateCatalog, quoteFor } from './rates';
+import { EQUIPMENT_KEYS } from '../database/quote';
 
 export const apiRouter = Router();
 
@@ -100,10 +102,56 @@ apiRouter.get('/config', async (req, res) => {
       fee_pct: configMap['fee_pct'] ?? 0.05,
       factor_pct: configMap['factor_pct'] ?? 0.03,
       broker_comparison_pct: configMap['broker_comparison_pct'] ?? 0.20,
-      fuel_rate_per_mile: configMap['fuel_rate_per_mile'] ?? 0.45
+      fuel_rate_per_mile: configMap['fuel_rate_per_mile'] ?? 0.45,
+      quote_gross_pct: configMap['quote_gross_pct'] ?? 0.07,
+      diesel_base_ppg: configMap['diesel_base_ppg'] ?? 3.50
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+const equipmentKeySchema = z.enum(EQUIPMENT_KEYS);
+
+apiRouter.get('/rates', async (_req, res) => {
+  try {
+    const catalog = await loadRateCatalog(db.as({ role: 'anon' }));
+    res.json(catalog);
+  } catch (err: any) {
+    sendError(res, err);
+  }
+});
+
+const quotePreviewSchema = z.object({
+  equipment_key: equipmentKeySchema,
+  miles: z.coerce.number().positive(),
+  deadhead_miles: z.coerce.number().min(0).optional().default(0),
+  demand_multiplier: z.coerce.number().positive().max(5).optional(),
+  express: z
+    .enum(['true', 'false', '1', '0'])
+    .optional()
+    .transform(v => v === 'true' || v === '1'),
+  accessorials: z.string().optional()
+});
+
+apiRouter.get('/quotes/preview', async (req, res) => {
+  try {
+    const q = quotePreviewSchema.parse(req.query);
+    const codes = (q.accessorials ?? '')
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+    const { quote } = await quoteFor(db.as({ role: 'anon' }), {
+      equipment_key: q.equipment_key,
+      miles: q.miles,
+      deadhead_miles: q.deadhead_miles,
+      demand_multiplier: q.demand_multiplier,
+      express: q.express,
+      accessorial_codes: codes
+    });
+    res.json({ quote });
+  } catch (err: any) {
+    sendError(res, err);
   }
 });
 
@@ -532,12 +580,16 @@ const createLoadSchema = z.object({
   dest_city: z.string().min(1),
   dest_state: z.string().length(2),
   miles: z.number().positive(),
-  rate_per_mile: z.number().positive(),
-  equipment_type: z.enum(['dry_van', 'reefer', 'flatbed', 'step_deck', 'power_only']),
+  rate_per_mile: z.number().positive().optional(),
+  equipment_type: equipmentKeySchema,
   pickup_date: z.string(),
   weight_lbs: z.number().optional(),
   notes: z.string().optional(),
-  same_day_funding_offered: z.boolean().default(false)
+  same_day_funding_offered: z.boolean().default(false),
+  deadhead_miles: z.number().min(0).optional().default(0),
+  demand_multiplier: z.number().positive().max(5).optional(),
+  express: z.boolean().optional().default(false),
+  accessorial_codes: z.array(z.string()).optional().default([])
 });
 
 apiRouter.post('/loads', authenticate, requireRole('shipper', 'admin'), async (req: AuthenticatedRequest, res) => {
@@ -554,24 +606,55 @@ apiRouter.post('/loads', authenticate, requireRole('shipper', 'admin'), async (r
       return res.status(400).json({ error: 'Shipper profile not found. Please complete shipper setup.' });
     }
 
+    const { quote } = await quoteFor(scoped(req, { shipperId }), {
+      equipment_key: body.equipment_type,
+      miles: body.miles,
+      deadhead_miles: body.deadhead_miles,
+      demand_multiplier: body.demand_multiplier,
+      express: body.express,
+      accessorial_codes: body.accessorial_codes
+    });
+
+    const overridden = body.rate_per_mile != null
+      && Math.abs(body.rate_per_mile - quote.quoted_rate_per_mile) > 0.0001;
+    const postedRate = overridden ? body.rate_per_mile! : quote.quoted_rate_per_mile;
+    if (postedRate <= 0) {
+      return res.status(400).json({ error: 'Quoted rate must be greater than zero.' });
+    }
+
     const loadId = newId('LD');
+    const quoteId = newId('QT');
     // Written under the resolved shipper identity: RLS rejects any attempt to
     // post a load on another shipper's behalf.
-    const shipperDb = scoped(req, { shipperId });
-    await shipperDb.query(`
-      INSERT INTO loads (
-        id, shipper_id, origin_city, origin_state, dest_city, dest_state, miles, rate_per_mile,
-        equipment_type, pickup_date, weight_lbs, notes, same_day_funding_offered, status
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'open')
-    `, [
-      loadId, shipperId, body.origin_city, body.origin_state, body.dest_city, body.dest_state,
-      body.miles, body.rate_per_mile, body.equipment_type, body.pickup_date,
-      body.weight_lbs || null, body.notes || null, body.same_day_funding_offered
-    ]);
+    const created = await db.transaction(async tx => {
+      await tx.query(`
+        INSERT INTO loads (
+          id, shipper_id, origin_city, origin_state, dest_city, dest_state, miles, rate_per_mile,
+          equipment_type, pickup_date, weight_lbs, notes, same_day_funding_offered, status
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'open')
+      `, [
+        loadId, shipperId, body.origin_city, body.origin_state, body.dest_city, body.dest_state,
+        body.miles, postedRate, body.equipment_type, body.pickup_date,
+        body.weight_lbs || null, body.notes || null, body.same_day_funding_offered
+      ]);
 
-    const created = await shipperDb.query('SELECT * FROM loads WHERE id = $1', [loadId]);
-    res.status(201).json(created.rows[0]);
+      await tx.query(`
+        INSERT INTO rate_quotes (
+          id, equipment_key, load_id, miles, deadhead_miles, demand_multiplier, express,
+          diesel_ppg, breakdown, quoted_total, quoted_rate_per_mile, overridden,
+          posted_rate_per_mile, actor_id
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,$13,$14)
+      `, [
+        quoteId, body.equipment_type, loadId, body.miles, body.deadhead_miles ?? 0,
+        quote.demand_multiplier, quote.express, quote.diesel_ppg, JSON.stringify(quote),
+        quote.quoted_total, quote.quoted_rate_per_mile, overridden, postedRate, req.user?.id
+      ]);
+
+      return tx.query('SELECT * FROM loads WHERE id = $1', [loadId]);
+    }, { ...sessionContextFor(req), shipperId });
+
+    res.status(201).json({ ...created.rows[0], quote, quote_id: quoteId, overridden });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
@@ -826,7 +909,7 @@ const driverOnboardSchema = z.object({
   cdl_class: z.enum(['A', 'B']).optional(),
   dot_number: z.string().optional(),
   mc_number: z.string().optional(),
-  equipment_type: z.enum(['dry_van', 'reefer', 'flatbed', 'step_deck', 'power_only']),
+  equipment_type: equipmentKeySchema,
   trailer_length_ft: z.number().optional().default(53),
   routing_number: z.string().optional(),
   account_number: z.string().optional(),
@@ -1037,6 +1120,91 @@ apiRouter.get('/admin/export', authenticate, requireRole('admin'), async (req: A
     res.send(csvContent);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+const rateCardPatchSchema = z.object({
+  rate_min_per_mile: z.number().positive().optional(),
+  rate_max_per_mile: z.number().positive().optional(),
+  base_rate_per_mile: z.number().positive().optional(),
+  short_haul_under_miles: z.number().positive().nullable().optional(),
+  short_haul_rate_min_per_mile: z.number().positive().nullable().optional(),
+  short_haul_rate_max_per_mile: z.number().positive().nullable().optional(),
+  short_haul_base_rate_per_mile: z.number().positive().nullable().optional(),
+  minimum_charge: z.number().min(0).optional(),
+  short_haul_minimum_charge: z.number().min(0).nullable().optional(),
+  deadhead_buffer_pct: z.number().min(0).max(1).optional(),
+  fuel_mpg: z.number().positive().optional(),
+  express_surcharge_pct: z.number().min(0).max(1).optional()
+});
+
+apiRouter.patch('/admin/rate-cards/:key', authenticate, requireRole('admin'), async (req: AuthenticatedRequest, res) => {
+  try {
+    const key = equipmentKeySchema.parse(req.params.key);
+    const body = rateCardPatchSchema.parse(req.body);
+    const entries = Object.entries(body).filter(([, v]) => v !== undefined);
+    if (entries.length === 0) {
+      return res.status(400).json({ error: 'No rate-card fields to update.' });
+    }
+    const sets = entries.map(([col], i) => `${col} = $${i + 2}`);
+    const params = [key, ...entries.map(([, v]) => v)];
+    const updated = await scoped(req).query(
+      `UPDATE equipment_rate_cards SET ${sets.join(', ')} WHERE equipment_key = $1 RETURNING *`,
+      params
+    );
+    if (!updated.rowCount) return res.status(404).json({ error: 'Rate card not found' });
+    res.json({ card: cardFromRow(updated.rows[0]) });
+  } catch (err: any) {
+    sendError(res, err);
+  }
+});
+
+apiRouter.post('/admin/diesel', authenticate, requireRole('admin'), async (req: AuthenticatedRequest, res) => {
+  try {
+    const body = z.object({
+      dollars_per_gallon: z.number().positive().lt(20),
+      source: z.string().min(1).max(40).optional().default('admin')
+    }).parse(req.body);
+    const id = newId('dsl');
+    await scoped(req).query(
+      `INSERT INTO diesel_prices (id, dollars_per_gallon, source, recorded_by)
+       VALUES ($1, $2, $3, $4)`,
+      [id, body.dollars_per_gallon, body.source, req.user?.id]
+    );
+    const catalog = await loadRateCatalog(scoped(req));
+    res.status(201).json({ id, diesel_ppg: catalog.diesel_ppg });
+  } catch (err: any) {
+    sendError(res, err);
+  }
+});
+
+apiRouter.patch('/admin/accessorials/:code', authenticate, requireRole('admin'), async (req: AuthenticatedRequest, res) => {
+  try {
+    const code = z.string().regex(/^[a-z][a-z0-9_]*$/).parse(req.params.code);
+    const body = z.object({ amount: z.number().min(0) }).parse(req.body);
+    const updated = await scoped(req).query(
+      `UPDATE accessorial_fees SET amount = $2, updated_at = now() WHERE code = $1 RETURNING *`,
+      [code, body.amount]
+    );
+    if (!updated.rowCount) return res.status(404).json({ error: 'Accessorial not found' });
+    res.json({ accessorial: updated.rows[0] });
+  } catch (err: any) {
+    sendError(res, err);
+  }
+});
+
+apiRouter.get('/admin/quotes', authenticate, requireRole('admin'), async (req: AuthenticatedRequest, res) => {
+  try {
+    const rows = await scoped(req).query(`
+      SELECT q.*, c.label AS equipment_label
+      FROM rate_quotes q
+      JOIN equipment_rate_cards c ON c.equipment_key = q.equipment_key
+      ORDER BY q.created_at DESC
+      LIMIT 100
+    `);
+    res.json({ quotes: rows.rows });
+  } catch (err: any) {
+    sendError(res, err);
   }
 });
 

@@ -28,6 +28,11 @@ export const FindLoads: React.FC<FindLoadsProps> = ({ currentUser, onOpenAuth, s
     queryFn: () => api.getConfig()
   });
 
+  const { data: catalog } = useQuery({
+    queryKey: ['rates'],
+    queryFn: () => api.getRates()
+  });
+
   // Fetch open loads from backend
   const { data: loads = [], isLoading, error } = useQuery({
     queryKey: ['loads', origin, destination, equipment, minRate],
@@ -127,11 +132,9 @@ export const FindLoads: React.FC<FindLoadsProps> = ({ currentUser, onOpenAuth, s
               className="w-full p-2.5 bg-[#F0EAD8] border-2 border-[#14171A] font-mono text-xs focus:outline-none focus:bg-white"
             >
               <option value="Any">Any Equipment</option>
-              <option value="dry_van">Dry Van</option>
-              <option value="reefer">Reefer</option>
-              <option value="flatbed">Flatbed</option>
-              <option value="step_deck">Step Deck</option>
-              <option value="power_only">Power Only</option>
+              {(catalog?.cards ?? []).map(c => (
+                <option key={c.equipment_key} value={c.equipment_key}>{c.label}</option>
+              ))}
             </select>
           </div>
           <div>
@@ -187,7 +190,8 @@ export const FindLoads: React.FC<FindLoadsProps> = ({ currentUser, onOpenAuth, s
                     </div>
 
                     <div className="inline-block bg-[#14171A] text-[#F0EAD8] font-mono font-bold text-[0.78rem] uppercase px-2.5 py-1 mb-4">
-                      EQUIPMENT: {load.equipment_type.replace('_', ' ')}
+                      EQUIPMENT: {catalog?.cards.find(c => c.equipment_key === load.equipment_type)?.label
+                        || load.equipment_type.replaceAll('_', ' ')}
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 font-mono text-xs mb-4">

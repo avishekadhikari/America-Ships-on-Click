@@ -43,7 +43,7 @@ At the end of the same migration the role also gets `statement_timeout = 15s`,
 runaway or hostile query cannot pin a pooled connection indefinitely. The block
 degrades to a `NOTICE` on managed servers that forbid `ALTER ROLE`.
 
-## Six contexts, set per transaction
+## Seven contexts, set per transaction
 
 Identity reaches the database as four `app.*` session settings, written by one
 parameterized statement ([`client.ts:46`](../database/client.ts)):
@@ -63,13 +63,14 @@ with no code path to blame. It also means a scoped query must be a transaction,
 which is why `db.as(ctx)` wraps every single statement in one
 ([`client.ts:93`](../database/client.ts)).
 
-Six roles exist, and three of them are not users:
+Seven roles exist, and four of them are not users:
 
 | Context | When | Exists because |
 | --- | --- | --- |
 | `anon` | Public reads — the load board, the ledger, `/api/config` | Unauthenticated visitors are a first-class caller here, not an error |
 | `auth` | Inside `POST /auth/login` only | Checking a password requires reading a `users` row *before* any identity exists |
 | `enrollment` | Inside `POST /auth/signup` only | Creating an account requires inserting rows before an identity exists |
+| `webhook` | Chain-indexer ingest after the route verifies the vendor signature | Phase 1 mint / stake / bonus events must be writable without a user JWT |
 | `driver` / `shipper` / `admin` | Authenticated requests | The verified JWT |
 
 `auth` and `enrollment` are the interesting ones. A naive design gives signup

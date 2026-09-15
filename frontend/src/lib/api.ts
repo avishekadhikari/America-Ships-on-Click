@@ -9,7 +9,11 @@ import {
   SettlementTotals,
   DriverOnboardInput,
   User,
-  VvipRole
+  VvipRole,
+  RateCatalog,
+  QuoteBreakdown,
+  RateCard,
+  RateQuoteLog
 } from '../types/api';
 
 const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || '/api';
@@ -38,6 +42,68 @@ async function handleResponse<T>(res: Response): Promise<T> {
 
 export const api = {
   // Config
+  async getRates(): Promise<RateCatalog> {
+    const res = await fetch(`${API_BASE}/rates`);
+    return handleResponse<RateCatalog>(res);
+  },
+
+  async previewQuote(params: {
+    equipment_key: string;
+    miles: number;
+    deadhead_miles?: number;
+    demand_multiplier?: number;
+    express?: boolean;
+    accessorials?: string[];
+  }): Promise<QuoteBreakdown> {
+    const q = new URLSearchParams({
+      equipment_key: params.equipment_key,
+      miles: String(params.miles),
+      deadhead_miles: String(params.deadhead_miles ?? 0),
+      express: params.express ? 'true' : 'false'
+    });
+    if (params.demand_multiplier != null) q.set('demand_multiplier', String(params.demand_multiplier));
+    if (params.accessorials?.length) q.set('accessorials', params.accessorials.join(','));
+    const res = await fetch(`${API_BASE}/quotes/preview?${q.toString()}`);
+    const data = await handleResponse<{ quote: QuoteBreakdown }>(res);
+    return data.quote;
+  },
+
+  async patchRateCard(key: string, body: Partial<RateCard>): Promise<RateCard> {
+    const res = await fetch(`${API_BASE}/admin/rate-cards/${key}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify(body)
+    });
+    const data = await handleResponse<{ card: RateCard }>(res);
+    return data.card;
+  },
+
+  async postDiesel(dollars_per_gallon: number): Promise<{ diesel_ppg: number }> {
+    const res = await fetch(`${API_BASE}/admin/diesel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify({ dollars_per_gallon })
+    });
+    return handleResponse<{ diesel_ppg: number }>(res);
+  },
+
+  async patchAccessorial(code: string, amount: number): Promise<void> {
+    const res = await fetch(`${API_BASE}/admin/accessorials/${code}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify({ amount })
+    });
+    await handleResponse(res);
+  },
+
+  async getQuoteLog(): Promise<RateQuoteLog[]> {
+    const res = await fetch(`${API_BASE}/admin/quotes`, {
+      headers: getAuthHeaders()
+    });
+    const data = await handleResponse<{ quotes: RateQuoteLog[] }>(res);
+    return data.quotes;
+  },
+
   async getConfig(): Promise<PlatformConfig> {
     const res = await fetch(`${API_BASE}/config`);
     return handleResponse<PlatformConfig>(res);
@@ -124,7 +190,12 @@ export const api = {
     return handleResponse<Load>(res);
   },
 
-  async createLoad(loadData: Partial<Load>): Promise<Load> {
+  async createLoad(loadData: Partial<Load> & {
+    deadhead_miles?: number;
+    demand_multiplier?: number;
+    express?: boolean;
+    accessorial_codes?: string[];
+  }): Promise<Load> {
     const res = await fetch(`${API_BASE}/loads`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },

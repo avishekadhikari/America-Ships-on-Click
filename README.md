@@ -140,7 +140,7 @@ the app:
 
 | File | Contents |
 | --- | --- |
-| `database/sql/schema.sql` | Structure only — 7 enums, 11 tables, 2 views, 20 indexes, all constraints |
+| `database/sql/schema.sql` | Structure only — enums, tables, views, indexes, constraints (regenerate after migrations) |
 | `database/sql/data.sql` | Rows only, as portable `INSERT` statements (load `schema.sql` first) |
 | `database/sql/security.sql` | Runtime role, GRANTs and REVOKEs (RLS policies travel inside `schema.sql`) |
 | `database/sql/database.sql` | Schema + data in one file — rebuilds everything from scratch |
@@ -250,7 +250,7 @@ The embedded PGlite fallback connects as a superuser, which bypasses RLS by
 design — develop against a real PostgreSQL server when you are testing policies.
 
 [`docs/SECURITY.md`](docs/SECURITY.md) goes through every policy in detail, explains
-the six request contexts and the two bugs migrations 0004 and 0005 record, and carries
+the request contexts and the two bugs migrations 0004 and 0005 record, and carries
 the full list of known gaps — including one that matters more than anything above:
 **`POST /api/auth/signup` accepts `role: "admin"`**, so an admin account is currently
 one unauthenticated request away.
@@ -370,12 +370,15 @@ JWT_SECRET="americashipsonclick_secret_jwt_key_2026"
 - Client & pooling: `/database/client.ts`; seeding: `/database/seed.ts`; CLI: `/database/cli.ts`
 - ERD Diagram: `/docs/ERD.mermaid` and `/docs/ERD.md`
 - Settlement math & booking lifecycle: [`/docs/SETTLEMENT.md`](docs/SETTLEMENT.md) — where every ledger number is decided, and why
-- Identity, roles, and RLS: [`/docs/SECURITY.md`](docs/SECURITY.md) — the six request contexts, every policy, and the two bugs migrations 0004 and 0005 record
+- Identity, roles, and RLS: [`/docs/SECURITY.md`](docs/SECURITY.md) — request contexts, every policy, and the two bugs migrations 0004 and 0005 record
 - Carrier onboarding: [`/docs/ONBOARDING.md`](docs/ONBOARDING.md) — the four-step wizard, what each step persists, and what it only appears to verify
 
 ### Main Tables:
-- `schema_migrations` (applied migration ledger)
-- `users`, `driver_profiles`, `driver_documents`, `driver_equipment`, `driver_payment_accounts`, `shipper_profiles`, `loads`, `bookings`, `settlements`, `platform_config`
+- Identity: `users`, `driver_profiles`, `driver_documents`, `driver_equipment`, `driver_payment_accounts`, `shipper_profiles`, `verification_reviews`
+- Freight: `loads`, `bookings`, `load_events`, `load_offers`, `settlements`, `settlement_disputes`, `settlement_adjustments`, `platform_config`
+- Phase 1 token: `wallets`, `chain_contracts`, `webhook_receipts`, `contract_events`, `token_buys`, `token_positions`, `app_memberships`, `premium_attestations`, `hourly_epochs`, `transaction_reserves`, `hourly_claims`, `driver_payouts`
+- Phase 2 (empty): `haul_receipts`
+- Ops: `vvip_leads`, `ratings`, `notifications`, `audit_log`, `refresh_tokens`, `schema_migrations`
 
 ### Database Views:
 - `public_ledger_view`: Joins settlements to loads while preserving driver/shipper anonymity.

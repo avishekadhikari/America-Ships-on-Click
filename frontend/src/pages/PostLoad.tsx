@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { EquipmentType, GeoPlace, User } from '../types/api';
@@ -27,18 +27,46 @@ export const PostLoad: React.FC<PostLoadProps> = ({ currentUser, onOpenAuth, set
     queryFn: () => api.getConfig()
   });
 
+  const { data: catalog } = useQuery({
+    queryKey: ['rates'],
+    queryFn: () => api.getRates()
+  });
+
   const [origin, setOrigin] = useState<GeoPlace | null>(null);
   const [dest, setDest] = useState<GeoPlace | null>(null);
   const [miles, setMiles] = useState<number>(0);
-  const [ratePerMile, setRatePerMile] = useState<number>(2.15);
+  const [ratePerMile, setRatePerMile] = useState<number>(2.18);
+  const [rateOverridden, setRateOverridden] = useState(false);
   const [equipmentType, setEquipmentType] = useState<EquipmentType>('dry_van');
   const [pickupDate, setPickupDate] = useState<string>(localISODate);
   const [weightLbs, setWeightLbs] = useState<number>(42000);
   const [sameDayFundingOffered, setSameDayFundingOffered] = useState<boolean>(false);
   const [notes, setNotes] = useState<string>('Palletized freight, clean trailer');
+  const [deadheadMiles, setDeadheadMiles] = useState<number>(0);
+  const [demandMultiplier, setDemandMultiplier] = useState<number>(1);
+  const [express, setExpress] = useState(false);
+  const [accessorials, setAccessorials] = useState<string[]>([]);
 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  const { data: quote } = useQuery({
+    queryKey: ['quote', equipmentType, miles, deadheadMiles, demandMultiplier, express, accessorials],
+    queryFn: () => api.previewQuote({
+      equipment_key: equipmentType,
+      miles,
+      deadhead_miles: deadheadMiles,
+      demand_multiplier: demandMultiplier,
+      express,
+      accessorials
+    }),
+    enabled: miles >= 1
+  });
+
+  useEffect(() => {
+    if (!quote || rateOverridden) return;
+    setRatePerMile(quote.quoted_rate_per_mile);
+  }, [quote, rateOverridden]);
 
   const preview = settlementPreview(miles, ratePerMile, config, {
     factored: sameDayFundingOffered
@@ -47,7 +75,7 @@ export const PostLoad: React.FC<PostLoadProps> = ({ currentUser, onOpenAuth, set
   const createLoadMutation = useMutation({
     mutationFn: (data: Parameters<typeof api.createLoad>[0]) => api.createLoad(data),
     onSuccess: (newLoad) => {
-      setSuccessMsg(`Load ${newLoad.id} posted to the board.`);
+      setSuccessMsg(`Load ${newLoad.id} posted at $${Number(newLoad.rate_per_mile).toFixed(2)}/mi.`);
       setErrorMsg(null);
       queryClient.invalidateQueries({ queryKey: ['loads'] });
       setTimeout(() => setActiveTab('dashboard'), 700);
@@ -86,14 +114,24 @@ export const PostLoad: React.FC<PostLoadProps> = ({ currentUser, onOpenAuth, set
       dest_city: dest.city,
       dest_state: dest.state.toUpperCase(),
       miles,
-      rate_per_mile: ratePerMile,
+      rate_per_mile: rateOverridden ? ratePerMile : undefined,
       equipment_type: equipmentType,
       pickup_date: pickupDate,
       weight_lbs: weightLbs,
       same_day_funding_offered: sameDayFundingOffered,
-      notes
+      notes,
+      deadhead_miles: deadheadMiles,
+      demand_multiplier: demandMultiplier,
+      express,
+      accessorial_codes: accessorials
     });
   };
+
+  const toggleAccessorial = (code: string) => {
+    setAccessorials(prev => prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code]);
+  };
+
+  const card = catalog?.cards.find(c => c.equipment_key === equipmentType);
 
   return (
     <div className="py-12">
@@ -101,7 +139,7 @@ export const PostLoad: React.FC<PostLoadProps> = ({ currentUser, onOpenAuth, set
         <span className="eyebrow block mb-1">Shipper Portal</span>
         <h2 className="text-2xl sm:text-3xl mb-2">Post a New Freight Load</h2>
         <p className="text-[#5B6168] mb-8">
-          Drop pickup and destination on the map. Miles come from the driving route; the calculator uses the same gross, fee, modeled fuel, and ledger net Open Books will publish.
+          Miles come from the map. Price comes from the equipment table: linehaul, distance minimum, deadhead buffer, diesel surcharge, accessorials, demand, express, then 7% gross.
         </p>
 
         {errorMsg && (
@@ -125,7 +163,7 @@ export const PostLoad: React.FC<PostLoadProps> = ({ currentUser, onOpenAuth, set
               dest={dest}
               onOriginChange={setOrigin}
               onDestChange={setDest}
-              onMilesChange={setMiles}
+              onMilesChange={(m) => { setMiles(m); setRateOverridden(false); }}
             />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -138,42 +176,63 @@ export const PostLoad: React.FC<PostLoadProps> = ({ currentUser, onOpenAuth, set
                   required
                   min={1}
                   value={miles || ''}
-                  onChange={(e) => setMiles(parseFloat(e.target.value) || 0)}
+                  onChange={(e) => { setMiles(parseFloat(e.target.value) || 0); setRateOverridden(false); }}
                   placeholder="From map"
                   className="w-full p-2.5 bg-[#F0EAD8] border border-[#E4DCC4] rounded text-sm font-mono"
                 />
               </div>
               <div>
                 <label className="block text-xs font-mono font-bold uppercase text-[#5B6168] mb-1">
-                  Offered Rate ($ / Mile)
+                  Posted rate ($ / mile)
                 </label>
                 <input
                   type="number"
-                  step="0.05"
+                  step="0.01"
                   required
                   value={ratePerMile}
-                  onChange={(e) => setRatePerMile(parseFloat(e.target.value) || 0)}
+                  onChange={(e) => {
+                    setRatePerMile(parseFloat(e.target.value) || 0);
+                    setRateOverridden(true);
+                  }}
                   className="w-full p-2.5 bg-[#F0EAD8] border border-[#E4DCC4] rounded text-sm font-mono"
                 />
+                {rateOverridden && (
+                  <button
+                    type="button"
+                    className="mt-1 text-[0.7rem] font-mono uppercase text-[#0F5132]"
+                    onClick={() => {
+                      setRateOverridden(false);
+                      if (quote) setRatePerMile(quote.quoted_rate_per_mile);
+                    }}
+                  >
+                    Use table rate
+                  </button>
+                )}
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-mono font-bold uppercase text-[#5B6168] mb-1">
-                  Equipment Needed
+                  Equipment
                 </label>
                 <select
                   value={equipmentType}
-                  onChange={(e) => setEquipmentType(e.target.value as EquipmentType)}
+                  onChange={(e) => { setEquipmentType(e.target.value as EquipmentType); setRateOverridden(false); }}
                   className="w-full p-2.5 bg-[#F0EAD8] border border-[#E4DCC4] rounded text-sm"
                 >
-                  <option value="dry_van">Dry Van</option>
-                  <option value="reefer">Reefer</option>
-                  <option value="flatbed">Flatbed</option>
-                  <option value="step_deck">Step Deck</option>
-                  <option value="power_only">Power Only</option>
+                  {(catalog?.cards ?? []).map(c => (
+                    <option key={c.equipment_key} value={c.equipment_key}>{c.label}</option>
+                  ))}
                 </select>
+                {card && (
+                  <p className="mt-1 text-[0.7rem] font-mono text-[#5B6168]">
+                    ${card.rate_min_per_mile.toFixed(2)}–${card.rate_max_per_mile.toFixed(2)}/mi
+                    {card.short_haul_under_miles
+                      ? ` · under ${card.short_haul_under_miles} mi min $${Number(card.short_haul_minimum_charge ?? card.minimum_charge).toFixed(0)}`
+                      : ` · min $${card.minimum_charge.toFixed(0)}`}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-mono font-bold uppercase text-[#5B6168] mb-1">
@@ -189,17 +248,69 @@ export const PostLoad: React.FC<PostLoadProps> = ({ currentUser, onOpenAuth, set
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-mono font-bold uppercase text-[#5B6168] mb-1">
-                Weight (lbs)
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-mono font-bold uppercase text-[#5B6168] mb-1">
+                  Deadhead miles
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  value={deadheadMiles || ''}
+                  onChange={(e) => setDeadheadMiles(parseFloat(e.target.value) || 0)}
+                  placeholder="0"
+                  className="w-full p-2.5 bg-[#F0EAD8] border border-[#E4DCC4] rounded text-sm font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-mono font-bold uppercase text-[#5B6168] mb-1">
+                  Demand ×
+                </label>
+                <input
+                  type="number"
+                  step="0.05"
+                  min={0.5}
+                  max={5}
+                  value={demandMultiplier}
+                  onChange={(e) => setDemandMultiplier(parseFloat(e.target.value) || 1)}
+                  className="w-full p-2.5 bg-[#F0EAD8] border border-[#E4DCC4] rounded text-sm font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-mono font-bold uppercase text-[#5B6168] mb-1">
+                  Weight (lbs)
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={weightLbs}
+                  onChange={(e) => setWeightLbs(parseFloat(e.target.value) || 0)}
+                  className="w-full p-2.5 bg-[#F0EAD8] border border-[#E4DCC4] rounded text-sm font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-4 font-mono text-xs pt-1">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={express}
+                  onChange={(e) => setExpress(e.target.checked)}
+                  className="w-4 h-4 accent-[#0F5132]"
+                />
+                <span>Express / expedite</span>
               </label>
-              <input
-                type="number"
-                min={1}
-                value={weightLbs}
-                onChange={(e) => setWeightLbs(parseFloat(e.target.value) || 0)}
-                className="w-full p-2.5 bg-[#F0EAD8] border border-[#E4DCC4] rounded text-sm font-mono"
-              />
+              {(catalog?.accessorials ?? []).map(a => (
+                <label key={a.code} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={accessorials.includes(a.code)}
+                    onChange={() => toggleAccessorial(a.code)}
+                    className="w-4 h-4 accent-[#0F5132]"
+                  />
+                  <span>{a.label} ({usd(a.amount)})</span>
+                </label>
+              ))}
             </div>
 
             <div>
@@ -232,41 +343,77 @@ export const PostLoad: React.FC<PostLoadProps> = ({ currentUser, onOpenAuth, set
               disabled={createLoadMutation.isPending}
               className="btn primary block w-full py-3 mt-4"
             >
-              {createLoadMutation.isPending ? 'Publishing Load...' : 'Publish Load to Board'}
+              {createLoadMutation.isPending ? 'Publishing Load...' : 'Accept quote and publish'}
             </button>
           </form>
 
           <div className="lg:col-span-5 bg-[#14171A] text-[#FAFAF7] rounded p-6 shadow-md sticky top-24 border border-[#1E2226]">
-            <span className="eyebrow on-dark block mb-1">Live Fee Calculator</span>
-            <h3 className="text-xl font-display-title mb-4">Financial Breakdown</h3>
+            <span className="eyebrow on-dark block mb-1">Equipment table quote</span>
+            <h3 className="text-xl font-display-title mb-4">
+              {quote ? usd(quote.quoted_total) : 'Set miles'}
+            </h3>
 
-            <div className="space-y-3 font-mono text-xs border-y border-[#FAFAF7]/15 py-4">
-              <div className="flex justify-between">
-                <span>Gross ({preview.miles} mi &times; ${preview.ratePerMile}/mi):</span>
-                <span className="font-bold">{usd(preview.gross)}</span>
-              </div>
-              <div className="flex justify-between text-[#E3A008]">
-                <span>Platform fee ({pctLabel(preview.feePct)}):</span>
-                <span>&minus;{usd(preview.fee)}</span>
-              </div>
-              <div className="flex justify-between text-[#C9CDD1]">
-                <span>Modeled fuel (${preview.fuelRate.toFixed(2)}/mi):</span>
-                <span>&minus;{usd(preview.fuel)}</span>
-              </div>
-              {sameDayFundingOffered && (
-                <div className="flex justify-between text-[#8C2F1B]">
-                  <span>Same-day quick pay ({pctLabel(preview.factorPct)}):</span>
-                  <span>&minus;{usd(preview.factor)}</span>
+            {quote ? (
+              <div className="space-y-3 font-mono text-xs border-y border-[#FAFAF7]/15 py-4">
+                <div className="flex justify-between">
+                  <span>Linehaul ({quote.miles} mi × ${quote.applied_rate_per_mile.toFixed(2)}):</span>
+                  <span>{usd(quote.linehaul_raw)}</span>
                 </div>
-              )}
-              <div className="flex justify-between text-[#FAFAF7] font-bold text-sm pt-3 border-t border-dashed border-[#FAFAF7]/20">
-                <span>Ledger net:</span>
-                <span className="text-[#E3A008] text-base">{usd(preview.net)}</span>
+                {quote.minimum_applied && (
+                  <div className="flex justify-between text-[#E3A008]">
+                    <span>Distance minimum:</span>
+                    <span>{usd(quote.minimum_floor)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-[#C9CDD1]">
+                  <span>Deadhead buffer:</span>
+                  <span>{usd(quote.deadhead_amount)}</span>
+                </div>
+                <div className="flex justify-between text-[#C9CDD1]">
+                  <span>Fuel (diesel ${quote.diesel_ppg.toFixed(2)}/gal):</span>
+                  <span>{usd(quote.fuel_surcharge)}</span>
+                </div>
+                {quote.accessorials_amount > 0 && (
+                  <div className="flex justify-between text-[#C9CDD1]">
+                    <span>Accessorials:</span>
+                    <span>{usd(quote.accessorials_amount)}</span>
+                  </div>
+                )}
+                {quote.demand_multiplier !== 1 && (
+                  <div className="flex justify-between">
+                    <span>Demand ×{quote.demand_multiplier}:</span>
+                    <span>{usd(quote.after_demand)}</span>
+                  </div>
+                )}
+                {quote.express && (
+                  <div className="flex justify-between text-[#E3A008]">
+                    <span>Express (+{pctLabel(quote.express_surcharge_pct)}):</span>
+                    <span>{usd(quote.after_express)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-[#E3A008]">
+                  <span>7% gross:</span>
+                  <span>{usd(quote.gross_markup)}</span>
+                </div>
+                <div className="flex justify-between text-[#FAFAF7] font-bold text-sm pt-3 border-t border-dashed border-[#FAFAF7]/20">
+                  <span>Quoted total / RPM:</span>
+                  <span className="text-[#E3A008] text-base">
+                    {usd(quote.quoted_total)} · ${quote.quoted_rate_per_mile.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between pt-2 text-[#C9CDD1]">
+                  <span>Ledger net after 5% fee:</span>
+                  <span>{usd(preview.net)}</span>
+                </div>
               </div>
-            </div>
+            ) : (
+              <p className="font-mono text-xs text-[#C9CDD1] py-4">
+                Pick equipment and a distance. Short cargo-van hauls under 100 miles floor at $200; car-carrier moves under 500 miles floor at $500.
+              </p>
+            )}
 
             <div className="mt-4 text-[0.78rem] font-mono text-[#C9CDD1] leading-relaxed">
-              Same arithmetic as settlement. Fuel is a modeled lane cost at the platform rate, copied onto the ledger row when the haul completes.
+              Diesel is a live index (now ${Number(catalog?.diesel_ppg ?? 0).toFixed(2)}/gal). The accepted total is logged so the table can be tuned later. Open Books still takes 5% of posted gross.
             </div>
           </div>
         </div>

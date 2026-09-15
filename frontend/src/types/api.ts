@@ -1,5 +1,18 @@
 export type UserRole = 'driver' | 'shipper' | 'admin';
-export type EquipmentType = 'dry_van' | 'reefer' | 'flatbed' | 'step_deck' | 'power_only';
+export type EquipmentType =
+  | 'cargo_van'
+  | 'bumper_pull'
+  | 'gooseneck_hotshot'
+  | 'gooseneck_cdl_40'
+  | 'gooseneck_specialized'
+  | 'car_carrier'
+  | 'flatbed'
+  | 'oversize_legal'
+  | 'oversize_permitted'
+  | 'dry_van'
+  | 'reefer'
+  | 'step_deck'
+  | 'power_only';
 export type LoadStatus = 'open' | 'booked' | 'in_transit' | 'delivered' | 'cancelled';
 export type BookingStatus = 'active' | 'completed' | 'cancelled';
 export type VvipRole = 'shipper' | 'carrier' | 'fleet' | 'other';
@@ -9,6 +22,87 @@ export interface PlatformConfig {
   factor_pct: number;
   broker_comparison_pct: number;
   fuel_rate_per_mile: number;
+  quote_gross_pct?: number;
+  diesel_base_ppg?: number;
+}
+
+export interface RateCard {
+  equipment_key: EquipmentType;
+  label: string;
+  cdl_required: boolean;
+  rate_min_per_mile: number;
+  rate_max_per_mile: number;
+  base_rate_per_mile: number;
+  short_haul_under_miles: number | null;
+  short_haul_rate_min_per_mile: number | null;
+  short_haul_rate_max_per_mile: number | null;
+  short_haul_base_rate_per_mile: number | null;
+  minimum_charge: number;
+  short_haul_minimum_charge: number | null;
+  deadhead_buffer_pct: number;
+  fuel_mpg: number;
+  express_surcharge_pct: number;
+}
+
+export interface AccessorialFee {
+  code: string;
+  label: string;
+  amount: number;
+  description?: string;
+}
+
+export interface RateCatalog {
+  cards: RateCard[];
+  accessorials: AccessorialFee[];
+  diesel_ppg: number;
+  diesel_base_ppg: number;
+  quote_gross_pct: number;
+  default_demand_multiplier: number;
+}
+
+export interface QuoteBreakdown {
+  equipment_key: string;
+  label: string;
+  miles: number;
+  applied_rate_per_mile: number;
+  short_haul: boolean;
+  linehaul_raw: number;
+  minimum_floor: number;
+  minimum_applied: boolean;
+  linehaul: number;
+  deadhead_miles: number;
+  deadhead_from_miles: number;
+  deadhead_from_buffer: number;
+  deadhead_amount: number;
+  diesel_ppg: number;
+  diesel_base_ppg: number;
+  fuel_mpg: number;
+  fuel_surcharge_per_mile: number;
+  fuel_surcharge: number;
+  accessorials: { code: string; label: string; amount: number }[];
+  accessorials_amount: number;
+  demand_multiplier: number;
+  express: boolean;
+  express_surcharge_pct: number;
+  after_demand: number;
+  after_express: number;
+  quote_gross_pct: number;
+  gross_markup: number;
+  quoted_total: number;
+  quoted_rate_per_mile: number;
+}
+
+export interface RateQuoteLog {
+  id: string;
+  equipment_key: EquipmentType;
+  equipment_label?: string;
+  load_id?: string;
+  miles: number;
+  quoted_total: number;
+  quoted_rate_per_mile: number;
+  posted_rate_per_mile: number;
+  overridden: boolean;
+  created_at: string;
 }
 
 export interface GeoPlace {

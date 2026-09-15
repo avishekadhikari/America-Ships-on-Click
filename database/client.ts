@@ -31,10 +31,11 @@ export type DriverName = 'postgres' | 'pglite';
  *   anon        unauthenticated public traffic
  *   auth        credential verification, before an identity exists
  *   enrollment  signup and driver onboarding
+ *   webhook     chain-indexer ingest (signature verified in the route)
  *   driver/shipper/admin  an authenticated user
  */
 export interface SessionContext {
-  role: 'anon' | 'auth' | 'enrollment' | 'driver' | 'shipper' | 'admin';
+  role: 'anon' | 'auth' | 'enrollment' | 'webhook' | 'driver' | 'shipper' | 'admin';
   userId?: string;
   driverId?: string;
   shipperId?: string;
