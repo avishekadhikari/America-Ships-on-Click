@@ -466,6 +466,15 @@ table.ledger tbody tr:hover {
   background: var(--paper);
 }
 
+.lane-suggest-meta {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 .lane-pin {
   background: none !important;
   border: none !important;

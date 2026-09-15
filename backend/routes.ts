@@ -7,7 +7,7 @@ import fs from 'fs';
 import { db, type SessionContext } from '../database';
 import { authenticate, generateToken, requireRole, AuthenticatedRequest } from './auth';
 import { accountLast4, clientIp, newId, sessionContextFor, tokenizeBankAccount } from './security';
-import { drivingRoute, reversePlace, searchPlaces } from './geo';
+import { drivingRoute, formatPlaceLabel, reversePlace, searchPlaces, type GeoPlace } from './geo';
 import { cardFromRow, loadRateCatalog, quoteFor } from './rates';
 import { EQUIPMENT_KEYS } from '../database/quote';
 
@@ -156,10 +156,10 @@ apiRouter.get('/quotes/preview', async (req, res) => {
 });
 
 // -------------------------------------------------------------
-// 1b. GEO — US city search, reverse geocode, driving miles
+// 1b. GEO — US address / street / ZIP / city search, reverse, miles
 // -------------------------------------------------------------
 const geoSearchSchema = z.object({
-  q: z.string().trim().min(2).max(80)
+  q: z.string().trim().min(2).max(160)
 });
 
 const geoCoordSchema = z.object({
@@ -174,10 +174,10 @@ apiRouter.get('/geo/search', async (req, res) => {
     res.json({ results });
   } catch (err: any) {
     if (err instanceof z.ZodError) {
-      res.status(400).json({ error: 'Enter at least two characters for a US city.' });
+      res.status(400).json({ error: 'Enter an address, street, city, or ZIP.' });
       return;
     }
-    res.status(502).json({ error: err.message || 'City lookup failed' });
+    res.status(502).json({ error: err.message || 'Place lookup failed' });
   }
 });
 
@@ -186,7 +186,7 @@ apiRouter.get('/geo/reverse', async (req, res) => {
     const { lat, lng } = geoCoordSchema.parse(req.query);
     const place = await reversePlace(lat, lng);
     if (!place) {
-      res.status(404).json({ error: 'Drop the pin on a US city.' });
+      res.status(404).json({ error: 'Drop the pin on a US address or city.' });
       return;
     }
     res.json({ place });
@@ -507,9 +507,93 @@ apiRouter.get('/auth/me', authenticate, async (req: AuthenticatedRequest, res) =
   });
 });
 
+function likeContains(raw: string): string {
+  return `%${raw.trim().replace(/[%_\\]/g, '')}%`;
+}
+
+function locationMatchSql(end: 'origin' | 'dest', paramIndex: number): string {
+  return `(
+    LOWER(l.${end}_city) LIKE LOWER($${paramIndex})
+    OR LOWER(l.${end}_state) LIKE LOWER($${paramIndex})
+    OR COALESCE(l.${end}_street, '') ILIKE $${paramIndex}
+    OR COALESCE(l.${end}_zip, '') ILIKE $${paramIndex}
+    OR COALESCE(l.${end}_address, '') ILIKE $${paramIndex}
+    OR (l.${end}_city || ', ' || l.${end}_state) ILIKE $${paramIndex}
+  )`;
+}
+
+function blankToNull(value?: string, max?: number): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  return max && trimmed.length > max ? trimmed.slice(0, max) : trimmed;
+}
+
+function geoFromLoadEnd(row: Record<string, unknown>, end: 'origin' | 'dest'): GeoPlace | null {
+  const city = String(row[`${end}_city`] ?? '').trim();
+  const state = String(row[`${end}_state`] ?? '').trim().toUpperCase();
+  const latRaw = row[`${end}_lat`];
+  const lngRaw = row[`${end}_lng`];
+  if (!city || state.length !== 2 || latRaw == null || lngRaw == null) return null;
+  const lat = Number(latRaw);
+  const lng = Number(lngRaw);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  const street = blankToNull(row[`${end}_street`] as string | undefined) ?? undefined;
+  const zip = blankToNull(row[`${end}_zip`] as string | undefined) ?? undefined;
+  const label = blankToNull(row[`${end}_address`] as string | undefined)
+    || formatPlaceLabel({ city, state, street, zip });
+  return {
+    city,
+    state,
+    lat,
+    lng,
+    street,
+    zip,
+    kind: street ? 'address' : zip ? 'postcode' : 'city',
+    label
+  };
+}
+
 // -------------------------------------------------------------
 // 3. LOADS ENDPOINTS
 // -------------------------------------------------------------
+apiRouter.get('/shipper/locations', authenticate, requireRole('shipper', 'admin'), async (req: AuthenticatedRequest, res) => {
+  try {
+    let shipperId = req.user?.shipperId;
+    if (!shipperId) {
+      const shp = await scoped(req).query<{ id: string }>('SELECT id FROM shipper_profiles WHERE user_id = $1', [req.user?.id]);
+      shipperId = shp.rows[0]?.id;
+    }
+    if (!shipperId) {
+      return res.json({ locations: [] as GeoPlace[] });
+    }
+
+    const result = await scoped(req, { shipperId }).query<Record<string, unknown>>(`
+      SELECT origin_city, origin_state, origin_lat, origin_lng, origin_street, origin_zip, origin_address,
+             dest_city, dest_state, dest_lat, dest_lng, dest_street, dest_zip, dest_address
+      FROM loads
+      WHERE shipper_id = $1
+      ORDER BY created_at DESC
+      LIMIT 40
+    `, [shipperId]);
+
+    const seen = new Set<string>();
+    const locations: GeoPlace[] = [];
+    for (const row of result.rows) {
+      for (const end of ['origin', 'dest'] as const) {
+        const place = geoFromLoadEnd(row, end);
+        if (!place) continue;
+        const key = place.label.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        locations.push(place);
+      }
+    }
+    res.json({ locations });
+  } catch (err: any) {
+    sendError(res, err);
+  }
+});
+
 apiRouter.get('/loads', async (req, res) => {
   try {
     const { origin, destination, equipment, minRate, status = 'open', page = '1', limit = '50' } = req.query;
@@ -530,13 +614,13 @@ apiRouter.get('/loads', async (req, res) => {
     }
 
     if (origin) {
-      params.push(`%${origin}%`);
-      query += ` AND (LOWER(l.origin_city) LIKE LOWER($${params.length}) OR LOWER(l.origin_state) LIKE LOWER($${params.length}))`;
+      params.push(likeContains(String(origin)));
+      query += ` AND ${locationMatchSql('origin', params.length)}`;
     }
 
     if (destination) {
-      params.push(`%${destination}%`);
-      query += ` AND (LOWER(l.dest_city) LIKE LOWER($${params.length}) OR LOWER(l.dest_state) LIKE LOWER($${params.length}))`;
+      params.push(likeContains(String(destination)));
+      query += ` AND ${locationMatchSql('dest', params.length)}`;
     }
 
     if (equipment && equipment !== 'Any') {
@@ -574,11 +658,23 @@ apiRouter.get('/loads/:id', async (req, res) => {
   }
 });
 
+const zipCodeSchema = z.string().trim().regex(/^\d{5}(-\d{4})?$/, 'ZIP must be 5 digits');
+
 const createLoadSchema = z.object({
   origin_city: z.string().min(1),
   origin_state: z.string().length(2),
   dest_city: z.string().min(1),
   dest_state: z.string().length(2),
+  origin_street: z.string().trim().min(1).max(120).optional(),
+  dest_street: z.string().trim().min(1).max(120).optional(),
+  origin_zip: zipCodeSchema.optional(),
+  dest_zip: zipCodeSchema.optional(),
+  origin_address: z.string().trim().min(1).max(200).optional(),
+  dest_address: z.string().trim().min(1).max(200).optional(),
+  origin_lat: z.number().gte(-90).lte(90).optional(),
+  origin_lng: z.number().gte(-180).lte(180).optional(),
+  dest_lat: z.number().gte(-90).lte(90).optional(),
+  dest_lng: z.number().gte(-180).lte(180).optional(),
   miles: z.number().positive(),
   rate_per_mile: z.number().positive().optional(),
   equipment_type: equipmentKeySchema,
@@ -629,12 +725,23 @@ apiRouter.post('/loads', authenticate, requireRole('shipper', 'admin'), async (r
     const created = await db.transaction(async tx => {
       await tx.query(`
         INSERT INTO loads (
-          id, shipper_id, origin_city, origin_state, dest_city, dest_state, miles, rate_per_mile,
-          equipment_type, pickup_date, weight_lbs, notes, same_day_funding_offered, status
+          id, shipper_id, origin_city, origin_state, dest_city, dest_state,
+          origin_street, origin_zip, origin_address, dest_street, dest_zip, dest_address,
+          origin_lat, origin_lng, dest_lat, dest_lng,
+          miles, rate_per_mile, equipment_type, pickup_date, weight_lbs, notes,
+          same_day_funding_offered, status
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'open')
+        VALUES (
+          $1, $2, $3, $4, $5, $6,
+          $7, $8, $9, $10, $11, $12,
+          $13, $14, $15, $16,
+          $17, $18, $19, $20, $21, $22, $23, 'open'
+        )
       `, [
         loadId, shipperId, body.origin_city, body.origin_state, body.dest_city, body.dest_state,
+        blankToNull(body.origin_street, 120), blankToNull(body.origin_zip), blankToNull(body.origin_address, 200),
+        blankToNull(body.dest_street, 120), blankToNull(body.dest_zip), blankToNull(body.dest_address, 200),
+        body.origin_lat ?? null, body.origin_lng ?? null, body.dest_lat ?? null, body.dest_lng ?? null,
         body.miles, postedRate, body.equipment_type, body.pickup_date,
         body.weight_lbs || null, body.notes || null, body.same_day_funding_offered
       ]);
@@ -671,6 +778,8 @@ apiRouter.get('/bookings', authenticate, async (req: AuthenticatedRequest, res) 
       SELECT
         b.id, b.load_id, b.driver_id, b.booked_at, b.status, b.pod_url, b.delivered_at,
         l.origin_city, l.origin_state, l.dest_city, l.dest_state,
+        l.origin_street, l.origin_zip, l.origin_address,
+        l.dest_street, l.dest_zip, l.dest_address,
         l.miles, l.rate_per_mile, l.equipment_type, l.pickup_date,
         l.same_day_funding_offered, l.status AS load_status, l.shipper_id, l.weight_lbs, l.notes
       FROM bookings b

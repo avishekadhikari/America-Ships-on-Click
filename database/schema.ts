@@ -109,6 +109,12 @@ export interface Load {
   origin_lng?: number;
   dest_lat?: number;
   dest_lng?: number;
+  origin_street?: string;
+  origin_zip?: string;
+  origin_address?: string;
+  dest_street?: string;
+  dest_zip?: string;
+  dest_address?: string;
   miles: number;
   rate_per_mile: number;
   equipment_type: EquipmentType;

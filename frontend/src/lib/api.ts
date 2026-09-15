@@ -116,6 +116,14 @@ export const api = {
     return data.results;
   },
 
+  async getShipperLocations(): Promise<GeoPlace[]> {
+    const res = await fetch(`${API_BASE}/shipper/locations`, {
+      headers: getAuthHeaders()
+    });
+    const data = await handleResponse<{ locations: GeoPlace[] }>(res);
+    return data.locations;
+  },
+
   async reverseGeocode(lat: number, lng: number): Promise<GeoPlace> {
     const params = new URLSearchParams({ lat: String(lat), lng: String(lng) });
     const res = await fetch(`${API_BASE}/geo/reverse?${params.toString()}`);

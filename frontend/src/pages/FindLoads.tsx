@@ -10,6 +10,10 @@ interface FindLoadsProps {
   setActiveTab: (tab: string) => void;
 }
 
+function lanePlace(city: string, state: string, address?: string): string {
+  return address || `${city}, ${state}`;
+}
+
 export const FindLoads: React.FC<FindLoadsProps> = ({ currentUser, onOpenAuth, setActiveTab }) => {
   const queryClient = useQueryClient();
 
@@ -93,7 +97,7 @@ export const FindLoads: React.FC<FindLoadsProps> = ({ currentUser, onOpenAuth, s
         <span className="eyebrow block mb-1">Find Freight</span>
         <h2 className="text-3xl sm:text-4xl mb-2">Available Load Board</h2>
         <p className="text-[#5B6168] font-sans text-xs sm:text-sm mb-8">
-          Filter open loads by lane or equipment. Ledger net is the same math Open Books will publish: gross minus the {config ? pctLabel(config.fee_pct) : '5%'} platform fee, modeled fuel, and optional same-day factor.
+          Filter open loads by the pickup the shipper set — exact address, street, ZIP, or city — and by equipment. Ledger net is the same math Open Books will publish: gross minus the {config ? pctLabel(config.fee_pct) : '5%'} platform fee, modeled fuel, and optional same-day factor.
         </p>
 
         {/* Tactile Filter Bar */}
@@ -104,7 +108,7 @@ export const FindLoads: React.FC<FindLoadsProps> = ({ currentUser, onOpenAuth, s
             </label>
             <input
               type="text"
-              placeholder="City or state"
+              placeholder="Address, street, city, or ZIP"
               value={origin}
               onChange={(e) => setOrigin(e.target.value)}
               className="w-full p-2.5 bg-[#F0EAD8] border-2 border-[#14171A] font-mono text-xs focus:outline-none focus:bg-white"
@@ -116,7 +120,7 @@ export const FindLoads: React.FC<FindLoadsProps> = ({ currentUser, onOpenAuth, s
             </label>
             <input
               type="text"
-              placeholder="City or state"
+              placeholder="Address, street, city, or ZIP"
               value={destination}
               onChange={(e) => setDestination(e.target.value)}
               className="w-full p-2.5 bg-[#F0EAD8] border-2 border-[#14171A] font-mono text-xs focus:outline-none focus:bg-white"
@@ -179,13 +183,15 @@ export const FindLoads: React.FC<FindLoadsProps> = ({ currentUser, onOpenAuth, s
               const preview = settlementPreview(load.miles, load.rate_per_mile, config, {
                 factored: load.same_day_funding_offered
               });
+              const pickup = lanePlace(load.origin_city, load.origin_state, load.origin_address);
+              const drop = lanePlace(load.dest_city, load.dest_state, load.dest_address);
 
               return (
                 <div key={load.id} className="bg-[#FAFAF7] border-2 border-[#14171A] p-5 shadow-[4px_4px_0px_#14171A] flex flex-col justify-between gap-4">
                   <div>
                     <div className="flex justify-between items-start mb-3">
                       <span className="font-serif font-black text-xl uppercase leading-tight text-[#14171A]">
-                        {load.origin_city}, {load.origin_state} <span className="text-[#E3A008]">&rarr;</span> {load.dest_city}, {load.dest_state}
+                        {pickup} <span className="text-[#E3A008]">&rarr;</span> {drop}
                       </span>
                     </div>
 
@@ -266,7 +272,7 @@ export const FindLoads: React.FC<FindLoadsProps> = ({ currentUser, onOpenAuth, s
 
               <span className="eyebrow block mb-1">Confirm Load Booking</span>
               <h3 className="text-2xl font-serif font-black uppercase mb-4 text-[#14171A]">
-                {selectedLoad.origin_city}, {selectedLoad.origin_state} &rarr; {selectedLoad.dest_city}, {selectedLoad.dest_state}
+                {selectedLoad.origin_address || `${selectedLoad.origin_city}, ${selectedLoad.origin_state}`} &rarr; {selectedLoad.dest_address || `${selectedLoad.dest_city}, ${selectedLoad.dest_state}`}
               </h3>
 
               {bookingSuccess ? (

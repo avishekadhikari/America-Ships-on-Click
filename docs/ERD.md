@@ -65,6 +65,9 @@ erDiagram
         load_status status "open booked in_transit delivered cancelled"
         numeric origin_lat "nullable pin"
         numeric dest_lat "nullable pin"
+        text origin_street "nullable dock / street"
+        text origin_zip "nullable 5-digit ZIP"
+        text origin_address "nullable full pickup label"
     }
 
     bookings {

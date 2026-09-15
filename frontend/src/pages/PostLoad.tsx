@@ -32,6 +32,12 @@ export const PostLoad: React.FC<PostLoadProps> = ({ currentUser, onOpenAuth, set
     queryFn: () => api.getRates()
   });
 
+  const { data: savedPlaces } = useQuery({
+    queryKey: ['shipper-locations'],
+    queryFn: () => api.getShipperLocations(),
+    enabled: !!currentUser && (currentUser.role === 'shipper' || currentUser.role === 'admin')
+  });
+
   const [origin, setOrigin] = useState<GeoPlace | null>(null);
   const [dest, setDest] = useState<GeoPlace | null>(null);
   const [miles, setMiles] = useState<number>(0);
@@ -78,6 +84,7 @@ export const PostLoad: React.FC<PostLoadProps> = ({ currentUser, onOpenAuth, set
       setSuccessMsg(`Load ${newLoad.id} posted at $${Number(newLoad.rate_per_mile).toFixed(2)}/mi.`);
       setErrorMsg(null);
       queryClient.invalidateQueries({ queryKey: ['loads'] });
+      queryClient.invalidateQueries({ queryKey: ['shipper-locations'] });
       setTimeout(() => setActiveTab('dashboard'), 700);
     },
     onError: (err: Error) => {
@@ -97,7 +104,7 @@ export const PostLoad: React.FC<PostLoadProps> = ({ currentUser, onOpenAuth, set
     }
 
     if (!origin || !dest) {
-      setErrorMsg('Drop pickup and destination on the map, or search both cities.');
+      setErrorMsg('Drop pickup and destination on the map, or search both locations.');
       return;
     }
     if (!miles || miles < 1) {
@@ -113,6 +120,16 @@ export const PostLoad: React.FC<PostLoadProps> = ({ currentUser, onOpenAuth, set
       origin_state: origin.state.toUpperCase(),
       dest_city: dest.city,
       dest_state: dest.state.toUpperCase(),
+      origin_street: origin.street,
+      origin_zip: origin.zip,
+      origin_address: origin.label,
+      dest_street: dest.street,
+      dest_zip: dest.zip,
+      dest_address: dest.label,
+      origin_lat: origin.lat,
+      origin_lng: origin.lng,
+      dest_lat: dest.lat,
+      dest_lng: dest.lng,
       miles,
       rate_per_mile: rateOverridden ? ratePerMile : undefined,
       equipment_type: equipmentType,
@@ -139,7 +156,7 @@ export const PostLoad: React.FC<PostLoadProps> = ({ currentUser, onOpenAuth, set
         <span className="eyebrow block mb-1">Shipper Portal</span>
         <h2 className="text-2xl sm:text-3xl mb-2">Post a New Freight Load</h2>
         <p className="text-[#5B6168] mb-8">
-          Miles come from the map. Price comes from the equipment table: linehaul, distance minimum, deadhead buffer, diesel surcharge, accessorials, demand, express, then 7% gross.
+          Miles come from the map. Search the dock address, street, ZIP, or a city — or reuse a location you have posted before. Price comes from the equipment table: linehaul, distance minimum, deadhead buffer, diesel surcharge, accessorials, demand, express, then 7% gross.
         </p>
 
         {errorMsg && (
@@ -161,6 +178,7 @@ export const PostLoad: React.FC<PostLoadProps> = ({ currentUser, onOpenAuth, set
             <LaneMap
               origin={origin}
               dest={dest}
+              savedPlaces={savedPlaces}
               onOriginChange={setOrigin}
               onDestChange={setDest}
               onMilesChange={(m) => { setMiles(m); setRateOverridden(false); }}

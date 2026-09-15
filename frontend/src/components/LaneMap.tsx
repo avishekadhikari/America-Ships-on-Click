@@ -6,9 +6,12 @@ import type { GeoPlace } from '../types/api';
 
 type PickMode = 'origin' | 'dest';
 
+const EMPTY_PLACES: GeoPlace[] = [];
+
 interface LaneMapProps {
   origin: GeoPlace | null;
   dest: GeoPlace | null;
+  savedPlaces?: GeoPlace[];
   onOriginChange: (place: GeoPlace) => void;
   onDestChange: (place: GeoPlace) => void;
   onMilesChange: (miles: number) => void;
@@ -26,27 +29,54 @@ function pinIcon(kind: PickMode): L.DivIcon {
   });
 }
 
-interface CitySearchProps {
+function kindLabel(kind?: GeoPlace['kind'], saved?: boolean): string {
+  if (saved) return 'Your location';
+  if (kind === 'address') return 'Address';
+  if (kind === 'street') return 'Street';
+  if (kind === 'postcode') return 'ZIP';
+  return 'City';
+}
+
+function placeMatches(place: GeoPlace, q: string): boolean {
+  const needle = q.trim().toLowerCase();
+  if (!needle) return false;
+  return [
+    place.label,
+    place.city,
+    place.state,
+    place.street,
+    place.zip
+  ].some((part) => (part ?? '').toLowerCase().includes(needle));
+}
+
+function placeKey(place: GeoPlace): string {
+  return `${place.label}|${place.lat.toFixed(5)}|${place.lng.toFixed(5)}`;
+}
+
+interface PlaceSearchProps {
   label: string;
   hint: string;
   placeholder: string;
   place: GeoPlace | null;
+  savedPlaces: GeoPlace[];
   active: boolean;
   onActivate: () => void;
   onSelect: (place: GeoPlace) => void;
 }
 
-const CitySearch: React.FC<CitySearchProps> = ({
+const PlaceSearch: React.FC<PlaceSearchProps> = ({
   label,
   hint,
   placeholder,
   place,
+  savedPlaces,
   active,
   onActivate,
   onSelect
 }) => {
   const [query, setQuery] = useState(place?.label ?? '');
   const [hits, setHits] = useState<GeoPlace[]>([]);
+  const [savedHits, setSavedHits] = useState<GeoPlace[]>([]);
   const [open, setOpen] = useState(false);
   const [searching, setSearching] = useState(false);
 
@@ -58,9 +88,14 @@ const CitySearch: React.FC<CitySearchProps> = ({
     const q = query.trim();
     if (q.length < 2 || q === place?.label) {
       setHits([]);
+      setSavedHits([]);
       setSearching(false);
       return;
     }
+
+    const matchedSaved = savedPlaces.filter((entry) => placeMatches(entry, q)).slice(0, 5);
+    setSavedHits(matchedSaved);
+    setOpen(true);
 
     let cancelled = false;
     setSearching(true);
@@ -68,7 +103,8 @@ const CitySearch: React.FC<CitySearchProps> = ({
       api.searchPlaces(q)
         .then((results) => {
           if (cancelled) return;
-          setHits(results);
+          const savedLabels = new Set(matchedSaved.map((entry) => entry.label.toLowerCase()));
+          setHits(results.filter((entry) => !savedLabels.has(entry.label.toLowerCase())));
           setOpen(true);
         })
         .catch(() => {
@@ -83,14 +119,17 @@ const CitySearch: React.FC<CitySearchProps> = ({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [query, place?.label]);
+  }, [query, place?.label, savedPlaces]);
 
   const pick = (next: GeoPlace) => {
     setQuery(next.label);
     setHits([]);
+    setSavedHits([]);
     setOpen(false);
     onSelect(next);
   };
+
+  const showList = open && (savedHits.length > 0 || hits.length > 0);
 
   return (
     <div className={`lane-search ${active ? 'is-active' : ''}`}>
@@ -113,7 +152,8 @@ const CitySearch: React.FC<CitySearchProps> = ({
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault();
-              if (hits[0]) pick(hits[0]);
+              const first = savedHits[0] ?? hits[0];
+              if (first) pick(first);
             }
           }}
           className="w-full p-2.5 bg-[#F0EAD8] border border-[#E4DCC4] rounded text-sm"
@@ -123,12 +163,21 @@ const CitySearch: React.FC<CitySearchProps> = ({
             …
           </span>
         )}
-        {open && hits.length > 0 && (
+        {showList && (
           <ul className="lane-suggest" role="listbox">
-            {hits.map((hit) => (
-              <li key={`${hit.city}-${hit.state}-${hit.lat}`}>
+            {savedHits.map((hit) => (
+              <li key={`saved-${placeKey(hit)}`}>
                 <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => pick(hit)}>
                   {hit.label}
+                  <span className="lane-suggest-meta">{kindLabel(hit.kind, true)}</span>
+                </button>
+              </li>
+            ))}
+            {hits.map((hit) => (
+              <li key={placeKey(hit)}>
+                <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => pick(hit)}>
+                  {hit.label}
+                  <span className="lane-suggest-meta">{kindLabel(hit.kind)}</span>
                 </button>
               </li>
             ))}
@@ -142,6 +191,7 @@ const CitySearch: React.FC<CitySearchProps> = ({
 export const LaneMap: React.FC<LaneMapProps> = ({
   origin,
   dest,
+  savedPlaces = EMPTY_PLACES,
   onOriginChange,
   onDestChange,
   onMilesChange
@@ -177,14 +227,14 @@ export const LaneMap: React.FC<LaneMapProps> = ({
       center: [39.5, -98.35],
       zoom: 4,
       minZoom: 3,
-      maxZoom: 12,
+      maxZoom: 18,
       zoomControl: true,
       attributionControl: true
     });
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors',
-      maxZoom: 12
+      maxZoom: 19
     }).addTo(map);
 
     map.on('click', (event: L.LeafletMouseEvent) => {
@@ -201,7 +251,7 @@ export const LaneMap: React.FC<LaneMapProps> = ({
           }
         })
         .catch((err: Error) => {
-          setMapError(err.message || 'Drop the pin on a US city.');
+          setMapError(err.message || 'Drop the pin on a US address or city.');
         })
         .finally(() => setLocating(false));
     });
@@ -290,28 +340,29 @@ export const LaneMap: React.FC<LaneMapProps> = ({
         weight: 3,
         opacity: 0.85
       }).addTo(map);
-      map.fitBounds(layers.line.getBounds(), { padding: [36, 36], maxZoom: 7 });
+      map.fitBounds(layers.line.getBounds(), { padding: [36, 36], maxZoom: 14 });
     } else if (origin) {
-      map.setView([origin.lat, origin.lng], 6);
+      map.setView([origin.lat, origin.lng], origin.street || origin.zip ? 15 : 10);
     }
   }, [origin, dest, geometry]);
 
   const status = locating
-    ? 'Locating city…'
+    ? 'Locating address…'
     : measuring
       ? 'Measuring driving miles…'
       : pickMode === 'origin'
-        ? 'Click the map to drop pickup (A), or search a city.'
-        : 'Click the map to drop destination (B), or search a city.';
+        ? 'Click the map to drop pickup (A), or search an address, street, city, or ZIP.'
+        : 'Click the map to drop destination (B), or search an address, street, city, or ZIP.';
 
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <CitySearch
-          label="Pickup city"
+        <PlaceSearch
+          label="Pickup location"
           hint="A"
-          placeholder="Dallas, TX"
+          placeholder="Address, street, city, or ZIP"
           place={origin}
+          savedPlaces={savedPlaces}
           active={pickMode === 'origin'}
           onActivate={() => setPickMode('origin')}
           onSelect={(place) => {
@@ -319,11 +370,12 @@ export const LaneMap: React.FC<LaneMapProps> = ({
             setPickMode('dest');
           }}
         />
-        <CitySearch
-          label="Destination city"
+        <PlaceSearch
+          label="Drop location"
           hint="B"
-          placeholder="Atlanta, GA"
+          placeholder="Address, street, city, or ZIP"
           place={dest}
+          savedPlaces={savedPlaces}
           active={pickMode === 'dest'}
           onActivate={() => setPickMode('dest')}
           onSelect={onDestChange}

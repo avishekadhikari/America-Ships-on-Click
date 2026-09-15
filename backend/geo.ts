@@ -1,12 +1,15 @@
 /**
- * Lane geocoding for Post Load. Nominatim (OSM) for US city lookup,
- * OSRM for driving miles. Browser clients cannot set Nominatim's required
- * User-Agent, so the app proxies these instead of calling them from the SPA.
+ * Lane geocoding for Post Load. Nominatim (OSM) for US place lookup —
+ * exact address, street, ZIP, or city — and OSRM for driving miles.
+ * Browser clients cannot set Nominatim's required User-Agent, so the app
+ * proxies these instead of calling them from the SPA.
  */
 
 const NOMINATIM = 'https://nominatim.openstreetmap.org';
 const OSRM = 'https://router.project-osrm.org';
 const USER_AGENT = 'AmericaShipsOnClick/1.0 (https://www.americashipsonclick.com; freight lane geocode)';
+
+export type GeoPlaceKind = 'address' | 'street' | 'postcode' | 'city';
 
 export type GeoPlace = {
   city: string;
@@ -14,6 +17,9 @@ export type GeoPlace = {
   lat: number;
   lng: number;
   label: string;
+  street?: string;
+  zip?: string;
+  kind: GeoPlaceKind;
 };
 
 export type GeoRoute = {
@@ -41,8 +47,20 @@ type NominatimAddress = Record<string, unknown>;
 type NominatimHit = {
   lat?: string;
   lon?: string;
+  class?: string;
+  type?: string;
+  addresstype?: string;
+  display_name?: string;
   address?: NominatimAddress;
 };
+
+function text(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+export function looksLikeZip(q: string): boolean {
+  return /^\d{5}(?:-\d{4})?$/.test(q.trim());
+}
 
 function usStateCode(address: NominatimAddress): string | null {
   const iso = address['ISO3166-2-lvl4'] ?? address['ISO3166-2-lvl3'];
@@ -63,22 +81,86 @@ function usStateCode(address: NominatimAddress): string | null {
 function cityFromAddress(address: NominatimAddress): string | null {
   const keys = ['city', 'town', 'village', 'hamlet', 'municipality', 'county'];
   for (const key of keys) {
-    const value = address[key];
-    if (typeof value === 'string' && value.trim()) return value.trim();
+    const value = text(address[key]);
+    if (value) return value;
   }
   return null;
 }
 
-function placeFromNominatim(hit: NominatimHit): GeoPlace | null {
+function zipFromAddress(address: NominatimAddress): string | undefined {
+  const zip = text(address.postcode);
+  const five = zip.match(/^(\d{5})/);
+  return five ? five[1] : undefined;
+}
+
+function streetFromAddress(address: NominatimAddress): string | undefined {
+  const road = text(address.road)
+    || text(address.pedestrian)
+    || text(address.residential)
+    || text(address.street);
+  if (!road) return undefined;
+  const house = text(address.house_number);
+  return house ? `${house} ${road}` : road;
+}
+
+function placeKind(
+  hit: NominatimHit,
+  address: NominatimAddress,
+  street: string | undefined,
+  preferPostcode: boolean
+): GeoPlaceKind {
+  const addresstype = text(hit.addresstype || hit.type).toLowerCase();
+  const cls = text(hit.class).toLowerCase();
+  if (text(address.house_number) || addresstype === 'house' || addresstype === 'building') {
+    return 'address';
+  }
+  if (cls === 'highway' || addresstype === 'road' || addresstype === 'residential' || addresstype === 'pedestrian') {
+    return 'street';
+  }
+  if (preferPostcode || addresstype === 'postcode' || addresstype === 'postal_code') {
+    return 'postcode';
+  }
+  if (street && text(address.house_number)) return 'address';
+  if (street) return 'street';
+  return 'city';
+}
+
+export function formatPlaceLabel(parts: {
+  city: string;
+  state: string;
+  street?: string;
+  zip?: string;
+}): string {
+  const locality = parts.zip
+    ? `${parts.city}, ${parts.state} ${parts.zip}`
+    : `${parts.city}, ${parts.state}`;
+  return parts.street ? `${parts.street}, ${locality}` : locality;
+}
+
+function placeFromNominatim(hit: NominatimHit, preferPostcode = false): GeoPlace | null {
   const address = hit.address;
   if (!address) return null;
   if (String(address.country_code || '').toLowerCase() !== 'us') return null;
   const state = usStateCode(address);
+  const zip = zipFromAddress(address);
+  const street = streetFromAddress(address);
   const city = cityFromAddress(address);
+  if (!state || (!city && !zip)) return null;
+  const cityName = city || 'Unincorporated';
   const lat = parseFloat(String(hit.lat ?? ''));
   const lng = parseFloat(String(hit.lon ?? ''));
-  if (!state || !city || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  return { city, state, lat, lng, label: `${city}, ${state}` };
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  const kind = placeKind(hit, address, street, preferPostcode);
+  return {
+    city: cityName,
+    state,
+    lat,
+    lng,
+    street,
+    zip,
+    kind,
+    label: formatPlaceLabel({ city: cityName, state, street, zip })
+  };
 }
 
 async function nominatimGet(url: URL): Promise<unknown> {
@@ -95,21 +177,14 @@ async function nominatimGet(url: URL): Promise<unknown> {
   return res.json();
 }
 
-export async function searchPlaces(q: string): Promise<GeoPlace[]> {
-  const url = new URL(`${NOMINATIM}/search`);
-  url.searchParams.set('q', q);
-  url.searchParams.set('format', 'json');
-  url.searchParams.set('addressdetails', '1');
-  url.searchParams.set('countrycodes', 'us');
-  url.searchParams.set('limit', '6');
-  const data = await nominatimGet(url);
+function collectPlaces(data: unknown, preferPostcode: boolean): GeoPlace[] {
   if (!Array.isArray(data)) return [];
   const seen = new Set<string>();
   const places: GeoPlace[] = [];
   for (const hit of data) {
-    const place = placeFromNominatim(hit as NominatimHit);
+    const place = placeFromNominatim(hit as NominatimHit, preferPostcode);
     if (!place) continue;
-    const key = `${place.city}|${place.state}`;
+    const key = place.label.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
     places.push(place);
@@ -117,15 +192,48 @@ export async function searchPlaces(q: string): Promise<GeoPlace[]> {
   return places;
 }
 
-export async function reversePlace(lat: number, lng: number): Promise<GeoPlace | null> {
+async function nominatimSearch(params: Record<string, string>): Promise<unknown> {
+  const url = new URL(`${NOMINATIM}/search`);
+  url.searchParams.set('format', 'json');
+  url.searchParams.set('addressdetails', '1');
+  url.searchParams.set('countrycodes', 'us');
+  url.searchParams.set('limit', '8');
+  for (const [key, value] of Object.entries(params)) {
+    url.searchParams.set(key, value);
+  }
+  return nominatimGet(url);
+}
+
+export async function searchPlaces(q: string): Promise<GeoPlace[]> {
+  const trimmed = q.trim();
+  if (looksLikeZip(trimmed)) {
+    const zip = trimmed.slice(0, 5);
+    const structured = collectPlaces(
+      await nominatimSearch({ postalcode: zip, country: 'us' }),
+      true
+    );
+    if (structured.length > 0) return structured;
+    return collectPlaces(await nominatimSearch({ q: zip }), true);
+  }
+
+  return collectPlaces(await nominatimSearch({ q: trimmed }), false);
+}
+
+async function reverseAtZoom(lat: number, lng: number, zoom: number): Promise<GeoPlace | null> {
   const url = new URL(`${NOMINATIM}/reverse`);
   url.searchParams.set('lat', String(lat));
   url.searchParams.set('lon', String(lng));
   url.searchParams.set('format', 'json');
   url.searchParams.set('addressdetails', '1');
-  url.searchParams.set('zoom', '10');
+  url.searchParams.set('zoom', String(zoom));
   const data = await nominatimGet(url);
   return placeFromNominatim(data as NominatimHit);
+}
+
+export async function reversePlace(lat: number, lng: number): Promise<GeoPlace | null> {
+  const street = await reverseAtZoom(lat, lng, 18);
+  if (street) return street;
+  return reverseAtZoom(lat, lng, 10);
 }
 
 function haversineMiles(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {

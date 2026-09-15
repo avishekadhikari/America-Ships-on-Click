@@ -111,6 +111,9 @@ export interface GeoPlace {
   lat: number;
   lng: number;
   label: string;
+  street?: string;
+  zip?: string;
+  kind?: 'address' | 'street' | 'postcode' | 'city';
 }
 
 export interface GeoRoute {
@@ -135,6 +138,16 @@ export interface Load {
   origin_state: string;
   dest_city: string;
   dest_state: string;
+  origin_street?: string;
+  origin_zip?: string;
+  origin_address?: string;
+  dest_street?: string;
+  dest_zip?: string;
+  dest_address?: string;
+  origin_lat?: number;
+  origin_lng?: number;
+  dest_lat?: number;
+  dest_lng?: number;
   miles: number;
   rate_per_mile: number;
   equipment_type: EquipmentType;
@@ -161,6 +174,12 @@ export interface BookingWithLoad extends Booking {
   origin_state: string;
   dest_city: string;
   dest_state: string;
+  origin_street?: string;
+  origin_zip?: string;
+  origin_address?: string;
+  dest_street?: string;
+  dest_zip?: string;
+  dest_address?: string;
   miles: number;
   rate_per_mile: number;
   equipment_type: EquipmentType;
