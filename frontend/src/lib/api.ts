@@ -1,7 +1,10 @@
 import {
   PlatformConfig,
+  GeoPlace,
+  GeoRoute,
   Load,
   Booking,
+  BookingWithLoad,
   PublicLedgerItem,
   SettlementTotals,
   DriverOnboardInput,
@@ -37,6 +40,34 @@ export const api = {
   async getConfig(): Promise<PlatformConfig> {
     const res = await fetch(`${API_BASE}/config`);
     return handleResponse<PlatformConfig>(res);
+  },
+
+  async searchPlaces(q: string): Promise<GeoPlace[]> {
+    const params = new URLSearchParams({ q });
+    const res = await fetch(`${API_BASE}/geo/search?${params.toString()}`);
+    const data = await handleResponse<{ results: GeoPlace[] }>(res);
+    return data.results;
+  },
+
+  async reverseGeocode(lat: number, lng: number): Promise<GeoPlace> {
+    const params = new URLSearchParams({ lat: String(lat), lng: String(lng) });
+    const res = await fetch(`${API_BASE}/geo/reverse?${params.toString()}`);
+    const data = await handleResponse<{ place: GeoPlace }>(res);
+    return data.place;
+  },
+
+  async drivingRoute(
+    from: { lat: number; lng: number },
+    to: { lat: number; lng: number }
+  ): Promise<GeoRoute> {
+    const params = new URLSearchParams({
+      fromLat: String(from.lat),
+      fromLng: String(from.lng),
+      toLat: String(to.lat),
+      toLng: String(to.lng)
+    });
+    const res = await fetch(`${API_BASE}/geo/route?${params.toString()}`);
+    return handleResponse<GeoRoute>(res);
   },
 
   // Auth
@@ -111,6 +142,14 @@ export const api = {
     return handleResponse<Booking>(res);
   },
 
+  async getBookings(): Promise<BookingWithLoad[]> {
+    const res = await fetch(`${API_BASE}/bookings`, {
+      headers: getAuthHeaders()
+    });
+    const data = await handleResponse<{ bookings: BookingWithLoad[] }>(res);
+    return data.bookings;
+  },
+
   async uploadPod(booking_id: string, pod_url: string): Promise<Booking> {
     const res = await fetch(`${API_BASE}/bookings/${booking_id}/pod`, {
       method: 'PATCH',
@@ -174,7 +213,28 @@ export const api = {
     return data.ledger;
   },
 
-  getAdminExportUrl(): string {
-    return `${API_BASE}/admin/export`;
+  async downloadAdminExport(): Promise<void> {
+    const res = await fetch(`${API_BASE}/admin/export`, {
+      headers: getAuthHeaders()
+    });
+    if (!res.ok) {
+      let errorMsg = `API Error ${res.status}`;
+      try {
+        const data = await res.json();
+        if (data.error) errorMsg = data.error;
+      } catch {
+        // ignore JSON parse error
+      }
+      throw new Error(errorMsg);
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'open-books-ledger-export.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   }
 };

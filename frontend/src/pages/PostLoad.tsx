@@ -1,34 +1,38 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
-import { EquipmentType, User } from '../types/api';
+import { EquipmentType, GeoPlace, User } from '../types/api';
+import { pctLabel, settlementPreview, usd } from '../lib/settlementPreview';
+import { LaneMap } from '../components/LaneMap';
 
 interface PostLoadProps {
   currentUser: User | null;
   onOpenAuth: () => void;
+  setActiveTab: (tab: string) => void;
 }
 
-export const PostLoad: React.FC<PostLoadProps> = ({ currentUser, onOpenAuth }) => {
+function localISODate(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+export const PostLoad: React.FC<PostLoadProps> = ({ currentUser, onOpenAuth, setActiveTab }) => {
   const queryClient = useQueryClient();
 
-  // Fetch single source of truth for platform config
   const { data: config } = useQuery({
     queryKey: ['config'],
     queryFn: () => api.getConfig()
   });
 
-  const feePct = config?.fee_pct ?? 0.05;
-  const factorPct = config?.factor_pct ?? 0.03;
-
-  // Form State
-  const [originCity, setOriginCity] = useState('');
-  const [originState, setOriginState] = useState('');
-  const [destCity, setDestCity] = useState('');
-  const [destState, setDestState] = useState('');
-  const [miles, setMiles] = useState<number>(780);
+  const [origin, setOrigin] = useState<GeoPlace | null>(null);
+  const [dest, setDest] = useState<GeoPlace | null>(null);
+  const [miles, setMiles] = useState<number>(0);
   const [ratePerMile, setRatePerMile] = useState<number>(2.15);
   const [equipmentType, setEquipmentType] = useState<EquipmentType>('dry_van');
-  const [pickupDate, setPickupDate] = useState<string>('2026-08-10');
+  const [pickupDate, setPickupDate] = useState<string>(localISODate);
   const [weightLbs, setWeightLbs] = useState<number>(42000);
   const [sameDayFundingOffered, setSameDayFundingOffered] = useState<boolean>(false);
   const [notes, setNotes] = useState<string>('Palletized freight, clean trailer');
@@ -36,21 +40,19 @@ export const PostLoad: React.FC<PostLoadProps> = ({ currentUser, onOpenAuth }) =
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Live Calculator Math
-  const grossAmount = (miles || 0) * (ratePerMile || 0);
-  const feeAmount = grossAmount * feePct;
-  const factorAmount = sameDayFundingOffered ? grossAmount * factorPct : 0;
-  const netTakeHome = grossAmount - feeAmount - factorAmount;
+  const preview = settlementPreview(miles, ratePerMile, config, {
+    factored: sameDayFundingOffered
+  });
 
-  // Create Load Mutation
   const createLoadMutation = useMutation({
-    mutationFn: (data: any) => api.createLoad(data),
+    mutationFn: (data: Parameters<typeof api.createLoad>[0]) => api.createLoad(data),
     onSuccess: (newLoad) => {
-      setSuccessMsg(`✓ Load ${newLoad.id} created successfully and posted to the board!`);
+      setSuccessMsg(`Load ${newLoad.id} posted to the board.`);
       setErrorMsg(null);
       queryClient.invalidateQueries({ queryKey: ['loads'] });
+      setTimeout(() => setActiveTab('dashboard'), 700);
     },
-    onError: (err: any) => {
+    onError: (err: Error) => {
       setErrorMsg(err.message || 'Failed to post load');
     }
   });
@@ -66,14 +68,23 @@ export const PostLoad: React.FC<PostLoadProps> = ({ currentUser, onOpenAuth }) =
       return;
     }
 
+    if (!origin || !dest) {
+      setErrorMsg('Drop pickup and destination on the map, or search both cities.');
+      return;
+    }
+    if (!miles || miles < 1) {
+      setErrorMsg('Need a lane distance before posting.');
+      return;
+    }
+
     setErrorMsg(null);
     setSuccessMsg(null);
 
     createLoadMutation.mutate({
-      origin_city: originCity,
-      origin_state: originState.toUpperCase(),
-      dest_city: destCity,
-      dest_state: destState.toUpperCase(),
+      origin_city: origin.city,
+      origin_state: origin.state.toUpperCase(),
+      dest_city: dest.city,
+      dest_state: dest.state.toUpperCase(),
       miles,
       rate_per_mile: ratePerMile,
       equipment_type: equipmentType,
@@ -90,7 +101,7 @@ export const PostLoad: React.FC<PostLoadProps> = ({ currentUser, onOpenAuth }) =
         <span className="eyebrow block mb-1">Shipper Portal</span>
         <h2 className="text-2xl sm:text-3xl mb-2">Post a New Freight Load</h2>
         <p className="text-[#5B6168] mb-8">
-          Enter lane details to calculate exact gross, platform fee, and carrier net take-home before posting.
+          Drop pickup and destination on the map. Miles come from the driving route; the calculator uses the same gross, fee, modeled fuel, and ledger net Open Books will publish.
         </p>
 
         {errorMsg && (
@@ -106,69 +117,16 @@ export const PostLoad: React.FC<PostLoadProps> = ({ currentUser, onOpenAuth }) =
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* Post Load Form */}
           <form onSubmit={handleSubmit} className="lg:col-span-7 bg-[#FAFAF7] border border-[#E4DCC4] rounded p-6 shadow-sm space-y-4">
             <h3 className="text-lg font-display-title mb-2">Lane Specifications</h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-mono font-bold uppercase text-[#5B6168] mb-1">
-                  Origin City
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Dallas"
-                  value={originCity}
-                  onChange={(e) => setOriginCity(e.target.value)}
-                  className="w-full p-2.5 bg-[#F0EAD8] border border-[#E4DCC4] rounded text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-mono font-bold uppercase text-[#5B6168] mb-1">
-                  Origin State (2-letter)
-                </label>
-                <input
-                  type="text"
-                  required
-                  maxLength={2}
-                  placeholder="TX"
-                  value={originState}
-                  onChange={(e) => setOriginState(e.target.value)}
-                  className="w-full p-2.5 bg-[#F0EAD8] border border-[#E4DCC4] rounded text-sm uppercase"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-mono font-bold uppercase text-[#5B6168] mb-1">
-                  Destination City
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Atlanta"
-                  value={destCity}
-                  onChange={(e) => setDestCity(e.target.value)}
-                  className="w-full p-2.5 bg-[#F0EAD8] border border-[#E4DCC4] rounded text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-mono font-bold uppercase text-[#5B6168] mb-1">
-                  Destination State (2-letter)
-                </label>
-                <input
-                  type="text"
-                  required
-                  maxLength={2}
-                  placeholder="GA"
-                  value={destState}
-                  onChange={(e) => setDestState(e.target.value)}
-                  className="w-full p-2.5 bg-[#F0EAD8] border border-[#E4DCC4] rounded text-sm uppercase"
-                />
-              </div>
-            </div>
+            <LaneMap
+              origin={origin}
+              dest={dest}
+              onOriginChange={setOrigin}
+              onDestChange={setDest}
+              onMilesChange={setMiles}
+            />
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
@@ -178,8 +136,10 @@ export const PostLoad: React.FC<PostLoadProps> = ({ currentUser, onOpenAuth }) =
                 <input
                   type="number"
                   required
-                  value={miles}
+                  min={1}
+                  value={miles || ''}
                   onChange={(e) => setMiles(parseFloat(e.target.value) || 0)}
+                  placeholder="From map"
                   className="w-full p-2.5 bg-[#F0EAD8] border border-[#E4DCC4] rounded text-sm font-mono"
                 />
               </div>
@@ -230,6 +190,19 @@ export const PostLoad: React.FC<PostLoadProps> = ({ currentUser, onOpenAuth }) =
             </div>
 
             <div>
+              <label className="block text-xs font-mono font-bold uppercase text-[#5B6168] mb-1">
+                Weight (lbs)
+              </label>
+              <input
+                type="number"
+                min={1}
+                value={weightLbs}
+                onChange={(e) => setWeightLbs(parseFloat(e.target.value) || 0)}
+                className="w-full p-2.5 bg-[#F0EAD8] border border-[#E4DCC4] rounded text-sm font-mono"
+              />
+            </div>
+
+            <div>
               <label className="flex items-center gap-2 cursor-pointer font-mono text-xs pt-2">
                 <input
                   type="checkbox"
@@ -237,7 +210,7 @@ export const PostLoad: React.FC<PostLoadProps> = ({ currentUser, onOpenAuth }) =
                   onChange={(e) => setSameDayFundingOffered(e.target.checked)}
                   className="w-4 h-4 accent-[#0F5132]"
                 />
-                <span>Offer Same-Day Quick Pay to Motor Carrier (+{(factorPct * 100)}%)</span>
+                <span>Offer Same-Day Quick Pay to Motor Carrier (+{pctLabel(preview.factorPct)})</span>
               </label>
             </div>
 
@@ -263,34 +236,37 @@ export const PostLoad: React.FC<PostLoadProps> = ({ currentUser, onOpenAuth }) =
             </button>
           </form>
 
-          {/* Live Fee Calculator Card */}
           <div className="lg:col-span-5 bg-[#14171A] text-[#FAFAF7] rounded p-6 shadow-md sticky top-24 border border-[#1E2226]">
             <span className="eyebrow on-dark block mb-1">Live Fee Calculator</span>
             <h3 className="text-xl font-display-title mb-4">Financial Breakdown</h3>
 
             <div className="space-y-3 font-mono text-xs border-y border-[#FAFAF7]/15 py-4">
               <div className="flex justify-between">
-                <span>Gross Load Total ({miles} miles &times; ${ratePerMile}/mi):</span>
-                <span className="font-bold">${grossAmount.toFixed(2)}</span>
+                <span>Gross ({preview.miles} mi &times; ${preview.ratePerMile}/mi):</span>
+                <span className="font-bold">{usd(preview.gross)}</span>
               </div>
               <div className="flex justify-between text-[#E3A008]">
-                <span>Platform Fee ({(feePct * 100).toFixed(0)}%):</span>
-                <span>&minus;${feeAmount.toFixed(2)}</span>
+                <span>Platform fee ({pctLabel(preview.feePct)}):</span>
+                <span>&minus;{usd(preview.fee)}</span>
+              </div>
+              <div className="flex justify-between text-[#C9CDD1]">
+                <span>Modeled fuel (${preview.fuelRate.toFixed(2)}/mi):</span>
+                <span>&minus;{usd(preview.fuel)}</span>
               </div>
               {sameDayFundingOffered && (
                 <div className="flex justify-between text-[#8C2F1B]">
-                  <span>Same-Day Quick Pay ({(factorPct * 100).toFixed(0)}%):</span>
-                  <span>&minus;${factorAmount.toFixed(2)}</span>
+                  <span>Same-day quick pay ({pctLabel(preview.factorPct)}):</span>
+                  <span>&minus;{usd(preview.factor)}</span>
                 </div>
               )}
               <div className="flex justify-between text-[#FAFAF7] font-bold text-sm pt-3 border-t border-dashed border-[#FAFAF7]/20">
-                <span>Carrier Net Take-Home:</span>
-                <span className="text-[#E3A008] text-base">${netTakeHome.toFixed(2)}</span>
+                <span>Ledger net:</span>
+                <span className="text-[#E3A008] text-base">{usd(preview.net)}</span>
               </div>
             </div>
 
-            <div className="mt-4 text-[0.72rem] font-mono text-[#C9CDD1] leading-relaxed">
-              * Rates and fee calculations are fetched directly from <code>/api/config</code>. All settlements publish publicly to Open Books upon delivery completion.
+            <div className="mt-4 text-[0.78rem] font-mono text-[#C9CDD1] leading-relaxed">
+              Same arithmetic as settlement. Fuel is a modeled lane cost at the platform rate, copied onto the ledger row when the haul completes.
             </div>
           </div>
         </div>

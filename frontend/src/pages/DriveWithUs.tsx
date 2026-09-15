@@ -15,10 +15,18 @@ const LOCAL_STORAGE_KEY = 'americaships_driver_wizard_draft';
  */
 const DRAFT_EXCLUDED_FIELDS = ['routing_number', 'account_number'] as const;
 
-function persistDraft(data: Record<string, any>) {
-  const safe = { ...data };
+function persistDraft(
+  data: Record<string, unknown>,
+  step: number,
+  accountCreated: boolean
+) {
+  const safe = { ...data } as Record<string, unknown>;
   DRAFT_EXCLUDED_FIELDS.forEach((field) => delete safe[field]);
-  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(safe));
+  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
+    form: safe,
+    step,
+    accountCreated
+  }));
 }
 
 export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) => {
@@ -41,15 +49,7 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
   const [uploadingField, setUploadingField] = useState<string | null>(null);
   const [scanStatus, setScanStatus] = useState<Record<string, string>>({});
 
-  // FMCSA Verification state
-  const [fmcsaVerifying, setFmcsaVerifying] = useState(false);
-  const [fmcsaVerified, setFmcsaVerified] = useState<boolean | null>(null);
-  const [fmcsaDetails, setFmcsaDetails] = useState<{
-    carrierName: string;
-    dotStatus: string;
-    safetyRating: string;
-    inspectionPassRate: string;
-  } | null>(null);
+  const [draftReady, setDraftReady] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -78,30 +78,32 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
     if (savedDraft) {
       try {
         const parsed = JSON.parse(savedDraft);
-        setFormData((prev) => ({ ...prev, ...parsed }));
-        if (parsed.dot_number) {
-          // Pre-populate simulated verification details if present
-          setFmcsaVerified(true);
-          setFmcsaDetails({
-            carrierName: (parsed.full_name || 'DRIVER').toUpperCase() + ' LOGISTICS LLC',
-            dotStatus: 'ACTIVE - AUTHORIZED FOR HIRE',
-            safetyRating: 'SATISFACTORY',
-            inspectionPassRate: '98.8%'
-          });
+        if (parsed.form) {
+          setFormData((prev) => ({ ...prev, ...parsed.form }));
+          if (typeof parsed.step === 'number' && parsed.step >= 1 && parsed.step <= 4) {
+            setStep(parsed.step);
+          }
+          if (parsed.accountCreated) setAccountCreated(true);
+        } else {
+          const { _wizardStep, _accountCreated, ...fields } = parsed;
+          setFormData((prev) => ({ ...prev, ...fields }));
+          if (typeof _wizardStep === 'number') setStep(_wizardStep);
+          if (_accountCreated) setAccountCreated(true);
         }
       } catch {
         // ignore parse error
       }
     }
+    setDraftReady(true);
   }, []);
 
-  // Save draft state to localStorage on changes
-  const updateField = (field: string, value: any) => {
-    setFormData((prev) => {
-      const updated = { ...prev, [field]: value };
-      persistDraft(updated);
-      return updated;
-    });
+  useEffect(() => {
+    if (!draftReady) return;
+    persistDraft(formData, step, accountCreated);
+  }, [draftReady, formData, step, accountCreated]);
+
+  const updateField = (field: string, value: unknown) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
 
     // Clear error for field
     if (fieldErrors[field]) {
@@ -119,60 +121,18 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
     if (!file) return;
 
     setUploadingField(fieldName);
-    setScanStatus((prev) => ({ ...prev, [fieldName]: 'Scanning document with OCR...' }));
+    setScanStatus((prev) => ({ ...prev, [fieldName]: 'Uploading...' }));
 
     try {
       const res = await api.uploadFile(file);
       updateField(fieldName, res.file_url);
-
-      setTimeout(() => {
-        if (fieldName === 'cdl_photo_url') {
-          setScanStatus((prev) => ({
-            ...prev,
-            [fieldName]: '✓ Verified: Valid State-Issued CDL Class ' + formData.cdl_class + ' detected'
-          }));
-        } else if (fieldName === 'dot_authority_url') {
-          setScanStatus((prev) => ({
-            ...prev,
-            [fieldName]: '✓ Verified: USDOT Interstate Authority Letter Validated'
-          }));
-        } else if (fieldName === 'coi_url') {
-          setScanStatus((prev) => ({
-            ...prev,
-            [fieldName]: '✓ Verified: $1,000,000 Liability & $100,000 Cargo Active Policy'
-          }));
-        } else {
-          setScanStatus((prev) => ({ ...prev, [fieldName]: '✓ Document uploaded & verified' }));
-        }
-        setUploadingField(null);
-      }, 600);
+      setScanStatus((prev) => ({ ...prev, [fieldName]: 'Uploaded. Pending review.' }));
+      setUploadingField(null);
     } catch (err: any) {
       alert(`File upload failed: ${err.message}`);
       setUploadingField(null);
-      setScanStatus((prev) => ({ ...prev, [fieldName]: '❌ Upload failed' }));
+      setScanStatus((prev) => ({ ...prev, [fieldName]: 'Upload failed' }));
     }
-  };
-
-  // Run FMCSA Verification check
-  const runFmcsaVerification = () => {
-    if (!formData.dot_number || formData.dot_number.trim().length < 5) {
-      setFieldErrors((prev) => ({ ...prev, dot_number: 'Enter a valid 6 to 8 digit USDOT number first' }));
-      return;
-    }
-
-    setFmcsaVerifying(true);
-    setFmcsaVerified(null);
-
-    setTimeout(() => {
-      setFmcsaVerifying(false);
-      setFmcsaVerified(true);
-      setFmcsaDetails({
-        carrierName: (formData.full_name ? formData.full_name.toUpperCase() : 'MOTOR CARRIER') + ' LOGISTICS LLC',
-        dotStatus: 'ACTIVE - AUTHORIZED FOR HIRE',
-        safetyRating: 'SATISFACTORY',
-        inspectionPassRate: '98.8%'
-      });
-    }, 1000);
   };
 
   // Validate step 1: Profile
@@ -222,7 +182,7 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
       errors.mc_number = 'MC number is required';
     }
     if (!formData.cdl_photo_url) {
-      errors.cdl_photo_url = 'CDL photo upload is required for verification';
+      errors.cdl_photo_url = 'CDL photo upload is required';
     }
     if (!formData.dot_authority_url) {
       errors.dot_authority_url = 'DOT Authority document upload is required';
@@ -272,7 +232,7 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
     else if (step === 4) isValid = validateStep4();
 
     if (!isValid) {
-      setErrorMsg('Please correct the highlighted verification errors before proceeding.');
+      setErrorMsg('Please correct the highlighted fields before proceeding.');
       return;
     }
 
@@ -332,10 +292,10 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
     try {
       // Identity is carried by the token, so the payload describes the profile
       // only — there is no field here that names which driver to write to.
-      const { email, phone, cdl_photo_url, dot_authority_url, coi_url, ...profile } = formData;
+      const { email, phone, ...profile } = formData;
       await api.onboardDriver(profile);
       localStorage.removeItem(LOCAL_STORAGE_KEY);
-      setSuccessMsg('Driver profile onboarded & verified! Your carrier profile is active for instant load booking.');
+      setSuccessMsg('Carrier profile saved. Documents are pending review — you can book loads while that runs.');
 
       // Refresh me details
       const me = await api.getMe();
@@ -356,14 +316,14 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
       <div className="max-w-[760px] mx-auto px-6">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
           <span className="eyebrow block">Drive With Us</span>
-          <span className="stamp text-[0.65rem] border-[#0F5132] text-[#0F5132]">
-            ✓ INSTANT CARRIER VERIFICATION
+          <span className="stamp text-[0.78rem] border-[#0F5132] text-[#0F5132]">
+            PENDING REVIEW
           </span>
         </div>
 
-        <h2 className="text-3xl sm:text-4xl mb-2 font-serif font-black">Driver Onboarding &amp; Verification</h2>
-        <p className="text-[#5B6168] font-mono text-xs sm:text-sm mb-8">
-          Complete verified carrier setup in four simple steps. Progress auto-saves as you type.
+        <h2 className="text-3xl sm:text-4xl mb-2 font-serif font-black">Driver Onboarding</h2>
+        <p className="text-[#5B6168] font-sans text-xs sm:text-sm mb-8">
+          Four steps. Progress auto-saves as you type. Uploaded documents sit pending review — this wizard does not verify a carrier.
         </p>
 
         {/* Wizard Progress Bar */}
@@ -390,7 +350,7 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
 
         {successMsg && (
           <div className="p-4 bg-[#0F5132] text-[#F0EAD8] border-2 border-[#14171A] font-mono text-sm mb-6 shadow-[4px_4px_0px_#14171A]">
-            <div className="font-bold text-base mb-1">✓ VERIFICATION COMPLETE &amp; APPROVED</div>
+            <div className="font-bold text-base mb-1">PROFILE SAVED</div>
             <div>{successMsg}</div>
           </div>
         )}
@@ -402,7 +362,7 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
             <div className="space-y-4">
               <div className="flex justify-between items-center mb-3 border-b-2 border-[#14171A] pb-2">
                 <h3 className="text-xl font-serif font-black uppercase text-[#14171A]">Step 1: Driver Identity Profile</h3>
-                <span className="font-mono text-[0.7rem] bg-[#E4DCC4] text-[#14171A] px-2 py-0.5 border border-[#14171A] font-bold">
+                <span className="font-mono text-[0.76rem] bg-[#E4DCC4] text-[#14171A] px-2 py-0.5 border border-[#14171A] font-bold">
                   STEP 1 OF 4
                 </span>
               </div>
@@ -421,7 +381,7 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
                     className={`w-full p-2.5 bg-[#F0EAD8] border-2 ${fieldErrors.full_name ? 'border-[#8C2F1B] bg-red-50' : 'border-[#14171A]'} text-xs font-mono focus:outline-none focus:bg-white`}
                   />
                   {fieldErrors.full_name && (
-                    <span className="text-[0.7rem] font-mono text-[#8C2F1B] font-bold mt-1 block">
+                    <span className="text-[0.76rem] font-mono text-[#8C2F1B] font-bold mt-1 block">
                       ✕ {fieldErrors.full_name}
                     </span>
                   )}
@@ -440,7 +400,7 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
                     className={`w-full p-2.5 bg-[#F0EAD8] border-2 ${fieldErrors.phone ? 'border-[#8C2F1B] bg-red-50' : 'border-[#14171A]'} text-xs font-mono focus:outline-none focus:bg-white`}
                   />
                   {fieldErrors.phone && (
-                    <span className="text-[0.7rem] font-mono text-[#8C2F1B] font-bold mt-1 block">
+                    <span className="text-[0.76rem] font-mono text-[#8C2F1B] font-bold mt-1 block">
                       ✕ {fieldErrors.phone}
                     </span>
                   )}
@@ -460,7 +420,7 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
                   className={`w-full p-2.5 bg-[#F0EAD8] border-2 ${fieldErrors.email ? 'border-[#8C2F1B] bg-red-50' : 'border-[#14171A]'} text-xs font-mono focus:outline-none focus:bg-white`}
                 />
                 {fieldErrors.email && (
-                  <span className="text-[0.7rem] font-mono text-[#8C2F1B] font-bold mt-1 block">
+                  <span className="text-[0.76rem] font-mono text-[#8C2F1B] font-bold mt-1 block">
                     ✕ {fieldErrors.email}
                   </span>
                 )}
@@ -489,7 +449,7 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
                       className={`w-full p-2.5 bg-[#F0EAD8] border-2 ${fieldErrors.password ? 'border-[#8C2F1B] bg-red-50' : 'border-[#14171A]'} text-xs font-mono focus:outline-none focus:bg-white`}
                     />
                     {fieldErrors.password && (
-                      <span className="text-[0.7rem] font-mono text-[#8C2F1B] font-bold mt-1 block">
+                      <span className="text-[0.76rem] font-mono text-[#8C2F1B] font-bold mt-1 block">
                         ✕ {fieldErrors.password}
                       </span>
                     )}
@@ -516,7 +476,7 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
                       className={`w-full p-2.5 bg-[#F0EAD8] border-2 ${fieldErrors.confirm_password ? 'border-[#8C2F1B] bg-red-50' : 'border-[#14171A]'} text-xs font-mono focus:outline-none focus:bg-white`}
                     />
                     {fieldErrors.confirm_password && (
-                      <span className="text-[0.7rem] font-mono text-[#8C2F1B] font-bold mt-1 block">
+                      <span className="text-[0.76rem] font-mono text-[#8C2F1B] font-bold mt-1 block">
                         ✕ {fieldErrors.confirm_password}
                       </span>
                     )}
@@ -526,7 +486,7 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
 
               {accountCreated && (
                 <div className="border-2 border-[#0F5132] bg-[#E4DCC4] px-3 py-2">
-                  <span className="font-mono text-[0.7rem] font-bold text-[#0F5132] uppercase">
+                  <span className="font-mono text-[0.76rem] font-bold text-[#0F5132] uppercase">
                     ✓ Carrier account created — document uploads are now secured to your profile
                   </span>
                 </div>
@@ -545,7 +505,7 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
                     className={`w-full p-2.5 bg-[#F0EAD8] border-2 ${fieldErrors.home_base_city ? 'border-[#8C2F1B] bg-red-50' : 'border-[#14171A]'} text-xs font-mono focus:outline-none focus:bg-white`}
                   />
                   {fieldErrors.home_base_city && (
-                    <span className="text-[0.7rem] font-mono text-[#8C2F1B] font-bold mt-1 block">
+                    <span className="text-[0.76rem] font-mono text-[#8C2F1B] font-bold mt-1 block">
                       ✕ {fieldErrors.home_base_city}
                     </span>
                   )}
@@ -564,21 +524,21 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
                     className={`w-full p-2.5 bg-[#F0EAD8] border-2 ${fieldErrors.home_base_state ? 'border-[#8C2F1B] bg-red-50' : 'border-[#14171A]'} text-xs font-mono focus:outline-none focus:bg-white uppercase`}
                   />
                   {fieldErrors.home_base_state && (
-                    <span className="text-[0.7rem] font-mono text-[#8C2F1B] font-bold mt-1 block">
+                    <span className="text-[0.76rem] font-mono text-[#8C2F1B] font-bold mt-1 block">
                       ✕ {fieldErrors.home_base_state}
                     </span>
                   )}
                 </div>
               </div>
 
-              {/* Instant Verification Status Box */}
+              {/* Identity status */}
               <div className="p-3 bg-[#E4DCC4]/50 border-2 border-[#14171A] font-mono text-xs flex items-center justify-between mt-4">
                 <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 bg-[#0F5132] border border-[#14171A] inline-block"></span>
-                  <span className="font-bold text-[#14171A]">Identity Verification Mode:</span>
-                  <span className="text-[#5B6168]">Real ID &amp; CDL Cross-Match Ready</span>
+                  <span className="w-2.5 h-2.5 bg-[#E3A008] border border-[#14171A] inline-block"></span>
+                  <span className="font-bold text-[#14171A]">Carrier documents:</span>
+                  <span className="text-[#5B6168]">Uploaded files wait for review. Nothing here auto-approves you.</span>
                 </div>
-                <span className="text-[0.65rem] uppercase font-bold bg-[#14171A] text-[#F0EAD8] px-2 py-0.5">
+                <span className="text-[0.78rem] uppercase font-bold bg-[#14171A] text-[#F0EAD8] px-2 py-0.5">
                   STATUS: PENDING
                 </span>
               </div>
@@ -590,7 +550,7 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
             <div className="space-y-5">
               <div className="flex justify-between items-center mb-3 border-b-2 border-[#14171A] pb-2">
                 <h3 className="text-xl font-serif font-black uppercase text-[#14171A]">Step 2: CDL &amp; Authority Credentials</h3>
-                <span className="font-mono text-[0.7rem] bg-[#E4DCC4] text-[#14171A] px-2 py-0.5 border border-[#14171A] font-bold">
+                <span className="font-mono text-[0.76rem] bg-[#E4DCC4] text-[#14171A] px-2 py-0.5 border border-[#14171A] font-bold">
                   STEP 2 OF 4
                 </span>
               </div>
@@ -608,7 +568,7 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
                     className={`w-full p-2.5 bg-[#F0EAD8] border-2 ${fieldErrors.cdl_number ? 'border-[#8C2F1B] bg-red-50' : 'border-[#14171A]'} text-xs font-mono focus:outline-none focus:bg-white`}
                   />
                   {fieldErrors.cdl_number && (
-                    <span className="text-[0.7rem] font-mono text-[#8C2F1B] font-bold mt-1 block">
+                    <span className="text-[0.76rem] font-mono text-[#8C2F1B] font-bold mt-1 block">
                       ✕ {fieldErrors.cdl_number}
                     </span>
                   )}
@@ -634,7 +594,6 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
                   <label className="block text-xs font-mono font-bold uppercase text-[#14171A] mb-1">
                     USDOT Number *
                   </label>
-                  <div className="flex gap-2">
                     <input
                       type="text"
                       value={formData.dot_number}
@@ -642,17 +601,8 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
                       placeholder="3321100"
                       className={`w-full p-2.5 bg-[#F0EAD8] border-2 ${fieldErrors.dot_number ? 'border-[#8C2F1B] bg-red-50' : 'border-[#14171A]'} text-xs font-mono focus:outline-none focus:bg-white`}
                     />
-                    <button
-                      type="button"
-                      onClick={runFmcsaVerification}
-                      disabled={fmcsaVerifying}
-                      className="px-3 py-2 bg-[#E3A008] text-[#14171A] border-2 border-[#14171A] font-mono text-xs font-bold whitespace-nowrap hover:bg-[#d09200]"
-                    >
-                      {fmcsaVerifying ? 'Checking...' : 'Verify USDOT'}
-                    </button>
-                  </div>
                   {fieldErrors.dot_number && (
-                    <span className="text-[0.7rem] font-mono text-[#8C2F1B] font-bold mt-1 block">
+                    <span className="text-[0.76rem] font-mono text-[#8C2F1B] font-bold mt-1 block">
                       ✕ {fieldErrors.dot_number}
                     </span>
                   )}
@@ -670,32 +620,16 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
                     className={`w-full p-2.5 bg-[#F0EAD8] border-2 ${fieldErrors.mc_number ? 'border-[#8C2F1B] bg-red-50' : 'border-[#14171A]'} text-xs font-mono focus:outline-none focus:bg-white`}
                   />
                   {fieldErrors.mc_number && (
-                    <span className="text-[0.7rem] font-mono text-[#8C2F1B] font-bold mt-1 block">
+                    <span className="text-[0.76rem] font-mono text-[#8C2F1B] font-bold mt-1 block">
                       ✕ {fieldErrors.mc_number}
                     </span>
                   )}
                 </div>
               </div>
 
-              {/* FMCSA Live Registry Result Box */}
-              {fmcsaVerified && fmcsaDetails && (
-                <div className="p-4 bg-[#0F5132] text-[#F0EAD8] border-2 border-[#14171A] font-mono text-xs shadow-[4px_4px_0px_#14171A]">
-                  <div className="flex justify-between items-center mb-2 border-b border-[#F0EAD8]/30 pb-2">
-                    <span className="font-bold uppercase tracking-wider text-[#E3A008]">
-                      ✓ FMCSA Live Registry Verification Passed
-                    </span>
-                    <span className="bg-[#E3A008] text-[#14171A] px-1.5 py-0.5 text-[0.65rem] font-bold uppercase">
-                      VERIFIED
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[0.75rem]">
-                    <div><strong>Carrier:</strong> {fmcsaDetails.carrierName}</div>
-                    <div><strong>USDOT Status:</strong> {fmcsaDetails.dotStatus}</div>
-                    <div><strong>Safety Rating:</strong> {fmcsaDetails.safetyRating}</div>
-                    <div><strong>Inspection Pass Rate:</strong> {fmcsaDetails.inspectionPassRate}</div>
-                  </div>
-                </div>
-              )}
+              <p className="font-mono text-[0.76rem] text-[#5B6168]">
+                USDOT and MC numbers are stored with your profile. They are not checked against FMCSA from this screen.
+              </p>
 
               {/* Document Upload 1: CDL */}
               <div className="pt-2 border-t-2 border-[#14171A]/10">
@@ -711,7 +645,7 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
                   />
                   {uploadingField === 'cdl_photo_url' && (
                     <span className="text-xs font-mono text-[#E3A008] font-bold animate-pulse whitespace-nowrap">
-                      ⚡ Scanning OCR...
+                      Uploading...
                     </span>
                   )}
                 </div>
@@ -721,7 +655,7 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
                   </span>
                 )}
                 {fieldErrors.cdl_photo_url && (
-                  <span className="text-[0.7rem] font-mono text-[#8C2F1B] font-bold mt-1 block">
+                  <span className="text-[0.76rem] font-mono text-[#8C2F1B] font-bold mt-1 block">
                     ✕ {fieldErrors.cdl_photo_url}
                   </span>
                 )}
@@ -741,7 +675,7 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
                   />
                   {uploadingField === 'dot_authority_url' && (
                     <span className="text-xs font-mono text-[#E3A008] font-bold animate-pulse whitespace-nowrap">
-                      ⚡ Scanning OCR...
+                      Uploading...
                     </span>
                   )}
                 </div>
@@ -751,7 +685,7 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
                   </span>
                 )}
                 {fieldErrors.dot_authority_url && (
-                  <span className="text-[0.7rem] font-mono text-[#8C2F1B] font-bold mt-1 block">
+                  <span className="text-[0.76rem] font-mono text-[#8C2F1B] font-bold mt-1 block">
                     ✕ {fieldErrors.dot_authority_url}
                   </span>
                 )}
@@ -763,8 +697,8 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
           {step === 3 && (
             <div className="space-y-5">
               <div className="flex justify-between items-center mb-3 border-b-2 border-[#14171A] pb-2">
-                <h3 className="text-xl font-serif font-black uppercase text-[#14171A]">Step 3: Equipment &amp; Insurance Verification</h3>
-                <span className="font-mono text-[0.7rem] bg-[#E4DCC4] text-[#14171A] px-2 py-0.5 border border-[#14171A] font-bold">
+                <h3 className="text-xl font-serif font-black uppercase text-[#14171A]">Step 3: Equipment &amp; Insurance</h3>
+                <span className="font-mono text-[0.76rem] bg-[#E4DCC4] text-[#14171A] px-2 py-0.5 border border-[#14171A] font-bold">
                   STEP 3 OF 4
                 </span>
               </div>
@@ -798,7 +732,7 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
                     className={`w-full p-2.5 bg-[#F0EAD8] border-2 ${fieldErrors.trailer_length_ft ? 'border-[#8C2F1B] bg-red-50' : 'border-[#14171A]'} text-xs font-mono focus:outline-none focus:bg-white`}
                   />
                   {fieldErrors.trailer_length_ft && (
-                    <span className="text-[0.7rem] font-mono text-[#8C2F1B] font-bold mt-1 block">
+                    <span className="text-[0.76rem] font-mono text-[#8C2F1B] font-bold mt-1 block">
                       ✕ {fieldErrors.trailer_length_ft}
                     </span>
                   )}
@@ -810,7 +744,7 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
                 <label className="block text-xs font-mono font-bold uppercase text-[#14171A] mb-1">
                   Upload Certificate of Insurance (COI) *
                 </label>
-                <div className="p-3 bg-[#E4DCC4]/30 border-2 border-[#14171A] mb-3 font-mono text-[0.72rem]">
+                <div className="p-3 bg-[#E4DCC4]/30 border-2 border-[#14171A] mb-3 font-mono text-[0.78rem]">
                   <strong>Insurance Requirement Thresholds:</strong> Minimum $1,000,000 Commercial Auto Liability and $100,000 Motor Truck Cargo Coverage.
                 </div>
                 <input
@@ -820,9 +754,9 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
                   className="w-full p-2 bg-[#F0EAD8] border-2 border-dashed border-[#14171A] text-xs font-mono cursor-pointer"
                 />
                 {uploadingField === 'coi_url' && (
-                  <span className="text-xs font-mono text-[#E3A008] font-bold animate-pulse block mt-1">
-                    ⚡ Auditing Insurance Coverage Thresholds...
-                  </span>
+                <span className="text-xs font-mono text-[#E3A008] font-bold animate-pulse block mt-1">
+                  Uploading...
+                </span>
                 )}
                 {scanStatus.coi_url && (
                   <span className="text-xs font-mono text-[#0F5132] font-bold block mt-1.5">
@@ -830,7 +764,7 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
                   </span>
                 )}
                 {fieldErrors.coi_url && (
-                  <span className="text-[0.7rem] font-mono text-[#8C2F1B] font-bold mt-1 block">
+                  <span className="text-[0.76rem] font-mono text-[#8C2F1B] font-bold mt-1 block">
                     ✕ {fieldErrors.coi_url}
                   </span>
                 )}
@@ -843,7 +777,7 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
             <div className="space-y-5">
               <div className="flex justify-between items-center mb-3 border-b-2 border-[#14171A] pb-2">
                 <h3 className="text-xl font-serif font-black uppercase text-[#14171A]">Step 4: Tokenized Direct Settlement Setup</h3>
-                <span className="font-mono text-[0.7rem] bg-[#E4DCC4] text-[#14171A] px-2 py-0.5 border border-[#14171A] font-bold">
+                <span className="font-mono text-[0.76rem] bg-[#E4DCC4] text-[#14171A] px-2 py-0.5 border border-[#14171A] font-bold">
                   STEP 4 OF 4
                 </span>
               </div>
@@ -866,12 +800,12 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
                     className={`w-full p-2.5 bg-[#F0EAD8] border-2 ${fieldErrors.routing_number ? 'border-[#8C2F1B] bg-red-50' : 'border-[#14171A]'} text-xs font-mono focus:outline-none focus:bg-white`}
                   />
                   {isValidRouting && (
-                    <span className="text-[0.7rem] font-mono text-[#0F5132] font-bold mt-1 block">
-                      ✓ Valid ABA Routing Format (JPMorgan Chase / Fedwire Verified)
+                    <span className="text-[0.76rem] font-mono text-[#0F5132] font-bold mt-1 block">
+                      ✓ 9-digit routing format
                     </span>
                   )}
                   {fieldErrors.routing_number && (
-                    <span className="text-[0.7rem] font-mono text-[#8C2F1B] font-bold mt-1 block">
+                    <span className="text-[0.76rem] font-mono text-[#8C2F1B] font-bold mt-1 block">
                       ✕ {fieldErrors.routing_number}
                     </span>
                   )}
@@ -889,7 +823,7 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
                     className={`w-full p-2.5 bg-[#F0EAD8] border-2 ${fieldErrors.account_number ? 'border-[#8C2F1B] bg-red-50' : 'border-[#14171A]'} text-xs font-mono focus:outline-none focus:bg-white`}
                   />
                   {fieldErrors.account_number && (
-                    <span className="text-[0.7rem] font-mono text-[#8C2F1B] font-bold mt-1 block">
+                    <span className="text-[0.76rem] font-mono text-[#8C2F1B] font-bold mt-1 block">
                       ✕ {fieldErrors.account_number}
                     </span>
                   )}
@@ -908,39 +842,34 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
                 </label>
               </div>
 
-              {/* Comprehensive Verification Checklist Summary Card */}
+              {(() => {
+                const checks = [
+                  { label: 'Driver identity & contact', ok: Boolean(formData.full_name && formData.email) },
+                  { label: 'CDL credentials', ok: Boolean(formData.cdl_number && formData.cdl_photo_url) },
+                  { label: 'USDOT & MC numbers', ok: Boolean(formData.dot_number && formData.mc_number && formData.dot_authority_url) },
+                  { label: 'Certificate of insurance', ok: Boolean(formData.coi_url) },
+                  { label: 'Payout routing', ok: isValidRouting }
+                ];
+                const passed = checks.filter((c) => c.ok).length;
+                return (
               <div className="mt-6 p-4 bg-[#14171A] text-[#F0EAD8] border-2 border-[#14171A] font-mono text-xs">
                 <div className="font-bold uppercase tracking-wider text-[#E3A008] mb-3 pb-1 border-b border-[#F0EAD8]/20 flex justify-between">
-                  <span>FINAL VERIFICATION CHECKLIST</span>
-                  <span>4 / 4 PASSED</span>
+                  <span>ONBOARDING CHECKLIST</span>
+                  <span>{passed} / {checks.length} READY</span>
                 </div>
-                <div className="space-y-1.5 text-[0.75rem]">
-                  <div className="flex justify-between">
-                    <span>Driver Identity &amp; Contact:</span>
-                    <span className="text-emerald-400 font-bold">✓ {formData.full_name || 'DRIVER'} ({formData.home_base_city}, {formData.home_base_state})</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>CDL License Credentials:</span>
-                    <span className="text-emerald-400 font-bold">✓ {formData.cdl_number || 'REQUIRED'} (CLASS {formData.cdl_class})</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>USDOT &amp; MC Authority:</span>
-                    <span className="text-emerald-400 font-bold">✓ USDOT #{formData.dot_number || 'PENDING'} · MC #{formData.mc_number || 'PENDING'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Certificate of Insurance (COI):</span>
-                    <span className={formData.coi_url ? "text-emerald-400 font-bold" : "text-[#E3A008] font-bold"}>
-                      {formData.coi_url ? '✓ $1M LIABILITY VERIFIED' : 'PENDING UPLOAD'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Banking Token Encryption:</span>
-                    <span className={isValidRouting ? "text-emerald-400 font-bold" : "text-[#E3A008] font-bold"}>
-                      {isValidRouting ? '✓ 256-BIT ENCRYPTED' : 'PENDING ROUTING'}
-                    </span>
-                  </div>
+                <div className="space-y-1.5 text-[0.8rem]">
+                  {checks.map((c) => (
+                    <div key={c.label} className="flex justify-between">
+                      <span>{c.label}:</span>
+                      <span className={c.ok ? 'text-emerald-400 font-bold' : 'text-[#E3A008] font-bold'}>
+                        {c.ok ? 'RECORDED' : 'PENDING'}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
+                );
+              })()}
             </div>
           )}
 
@@ -960,7 +889,7 @@ export const DriveWithUs: React.FC<DriveWithUsProps> = ({ onSuccessOnboard }) =>
               disabled={submitting}
               className="btn primary text-xs py-2.5 px-6 cursor-pointer"
             >
-              {submitting ? 'Verifying & Submitting...' : step === 4 ? 'Complete & Verify Profile' : 'Continue'}
+              {submitting ? 'Submitting...' : step === 4 ? 'Save carrier profile' : 'Continue'}
             </button>
           </div>
         </div>

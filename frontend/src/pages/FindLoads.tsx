@@ -1,14 +1,16 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { Load, User } from '../types/api';
+import { pctLabel, settlementPreview, usd } from '../lib/settlementPreview';
 
 interface FindLoadsProps {
   currentUser: User | null;
   onOpenAuth: () => void;
+  setActiveTab: (tab: string) => void;
 }
 
-export const FindLoads: React.FC<FindLoadsProps> = ({ currentUser, onOpenAuth }) => {
+export const FindLoads: React.FC<FindLoadsProps> = ({ currentUser, onOpenAuth, setActiveTab }) => {
   const queryClient = useQueryClient();
 
   const [origin, setOrigin] = useState('');
@@ -25,8 +27,6 @@ export const FindLoads: React.FC<FindLoadsProps> = ({ currentUser, onOpenAuth })
     queryKey: ['config'],
     queryFn: () => api.getConfig()
   });
-
-  const feePct = config?.fee_pct ?? 0.05;
 
   // Fetch open loads from backend
   const { data: loads = [], isLoading, error } = useQuery({
@@ -47,10 +47,12 @@ export const FindLoads: React.FC<FindLoadsProps> = ({ currentUser, onOpenAuth })
       setBookingSuccess(true);
       setBookingError(null);
       queryClient.invalidateQueries({ queryKey: ['loads'] });
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
       setTimeout(() => {
         setSelectedLoad(null);
         setBookingSuccess(false);
-      }, 2000);
+        setActiveTab('dashboard');
+      }, 900);
     },
     onError: (err: any) => {
       setBookingError(err.message || 'Failed to book load');
@@ -71,19 +73,28 @@ export const FindLoads: React.FC<FindLoadsProps> = ({ currentUser, onOpenAuth })
     setBookingSuccess(false);
   };
 
+  useEffect(() => {
+    if (!selectedLoad) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelectedLoad(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedLoad]);
+
   return (
     <div className="py-12 bg-[#F0EAD8] text-[#14171A]">
       <div className="max-w-[1180px] mx-auto px-6">
         <span className="eyebrow block mb-1">Find Freight</span>
         <h2 className="text-3xl sm:text-4xl mb-2">Available Load Board</h2>
-        <p className="text-[#5B6168] font-mono text-xs sm:text-sm mb-8">
-          Filter open loads by lane or equipment. Take-home pay is computed directly using our { (feePct * 100).toFixed(0) }% platform fee.
+        <p className="text-[#5B6168] font-sans text-xs sm:text-sm mb-8">
+          Filter open loads by lane or equipment. Ledger net is the same math Open Books will publish: gross minus the {config ? pctLabel(config.fee_pct) : '5%'} platform fee, modeled fuel, and optional same-day factor.
         </p>
 
         {/* Tactile Filter Bar */}
         <div className="bg-[#FAFAF7] border-2 border-[#14171A] p-5 mb-10 shadow-[6px_6px_0px_#14171A] grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 items-end">
           <div>
-            <label className="block text-[0.7rem] uppercase font-mono font-bold tracking-wider text-[#14171A] mb-1">
+            <label className="block text-[0.76rem] uppercase font-mono font-bold tracking-wider text-[#14171A] mb-1">
               Origin
             </label>
             <input
@@ -95,7 +106,7 @@ export const FindLoads: React.FC<FindLoadsProps> = ({ currentUser, onOpenAuth })
             />
           </div>
           <div>
-            <label className="block text-[0.7rem] uppercase font-mono font-bold tracking-wider text-[#14171A] mb-1">
+            <label className="block text-[0.76rem] uppercase font-mono font-bold tracking-wider text-[#14171A] mb-1">
               Destination
             </label>
             <input
@@ -107,7 +118,7 @@ export const FindLoads: React.FC<FindLoadsProps> = ({ currentUser, onOpenAuth })
             />
           </div>
           <div>
-            <label className="block text-[0.7rem] uppercase font-mono font-bold tracking-wider text-[#14171A] mb-1">
+            <label className="block text-[0.76rem] uppercase font-mono font-bold tracking-wider text-[#14171A] mb-1">
               Equipment
             </label>
             <select
@@ -124,7 +135,7 @@ export const FindLoads: React.FC<FindLoadsProps> = ({ currentUser, onOpenAuth })
             </select>
           </div>
           <div>
-            <label className="block text-[0.7rem] uppercase font-mono font-bold tracking-wider text-[#14171A] mb-1">
+            <label className="block text-[0.76rem] uppercase font-mono font-bold tracking-wider text-[#14171A] mb-1">
               Min $/mile
             </label>
             <input
@@ -162,11 +173,9 @@ export const FindLoads: React.FC<FindLoadsProps> = ({ currentUser, onOpenAuth })
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {loads.map((load) => {
-              const numMiles = Number(load.miles) || 0;
-              const numRate = Number(load.rate_per_mile) || 0;
-              const gross = numMiles * numRate;
-              const fee = gross * feePct;
-              const netTakeHome = gross - fee;
+              const preview = settlementPreview(load.miles, load.rate_per_mile, config, {
+                factored: load.same_day_funding_offered
+              });
 
               return (
                 <div key={load.id} className="bg-[#FAFAF7] border-2 border-[#14171A] p-5 shadow-[4px_4px_0px_#14171A] flex flex-col justify-between gap-4">
@@ -177,32 +186,48 @@ export const FindLoads: React.FC<FindLoadsProps> = ({ currentUser, onOpenAuth })
                       </span>
                     </div>
 
-                    <div className="inline-block bg-[#14171A] text-[#F0EAD8] font-mono font-bold text-[0.65rem] uppercase px-2.5 py-1 mb-4">
+                    <div className="inline-block bg-[#14171A] text-[#F0EAD8] font-mono font-bold text-[0.78rem] uppercase px-2.5 py-1 mb-4">
                       EQUIPMENT: {load.equipment_type.replace('_', ' ')}
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 font-mono text-xs mb-4">
                       <div>
-                        <div className="text-[#5B6168] text-[0.65rem] uppercase font-bold">Miles</div>
-                        <div className="font-bold text-sm">{numMiles.toLocaleString()}</div>
+                        <div className="text-[#5B6168] text-[0.78rem] uppercase font-bold">Miles</div>
+                        <div className="font-bold text-sm">{preview.miles.toLocaleString()}</div>
                       </div>
                       <div>
-                        <div className="text-[#5B6168] text-[0.65rem] uppercase font-bold">Total Gross</div>
-                        <div className="font-bold text-sm">${gross.toFixed(2)}</div>
+                        <div className="text-[#5B6168] text-[0.78rem] uppercase font-bold">Total Gross</div>
+                        <div className="font-bold text-sm">{usd(preview.gross)}</div>
                       </div>
                       <div>
-                        <div className="text-[#5B6168] text-[0.65rem] uppercase font-bold">Rate / Mile</div>
-                        <div className="font-bold text-sm text-[#0F5132]">${numRate.toFixed(2)}</div>
+                        <div className="text-[#5B6168] text-[0.78rem] uppercase font-bold">Rate / Mile</div>
+                        <div className="font-bold text-sm text-[#0F5132]">${preview.ratePerMile.toFixed(2)}</div>
                       </div>
                       <div>
-                        <div className="text-[#5B6168] text-[0.65rem] uppercase font-bold">Pickup Date</div>
+                        <div className="text-[#5B6168] text-[0.78rem] uppercase font-bold">Pickup Date</div>
                         <div className="font-bold text-sm">{load.pickup_date}</div>
                       </div>
                     </div>
 
-                    <div className="bg-[#F0EAD8] border-2 border-[#14171A] p-3 flex justify-between font-mono text-xs mb-4">
-                      <span className="text-[#14171A] font-bold">Take-Home ({(100 - feePct * 100)}%):</span>
-                      <span className="text-[#0F5132] font-black text-sm">${netTakeHome.toFixed(2)}</span>
+                    <div className="bg-[#F0EAD8] border-2 border-[#14171A] p-3 font-mono text-xs mb-4 space-y-1">
+                      <div className="flex justify-between">
+                        <span>Platform fee ({pctLabel(preview.feePct)})</span>
+                        <span>&minus;{usd(preview.fee)}</span>
+                      </div>
+                      <div className="flex justify-between text-[#5B6168]">
+                        <span>Modeled fuel (${preview.fuelRate.toFixed(2)}/mi)</span>
+                        <span>&minus;{usd(preview.fuel)}</span>
+                      </div>
+                      {preview.factored && (
+                        <div className="flex justify-between text-[#5B6168]">
+                          <span>Same-day factor ({pctLabel(preview.factorPct)})</span>
+                          <span>&minus;{usd(preview.factor)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between font-bold pt-1 border-t border-[#14171A]/20">
+                        <span className="text-[#14171A]">Ledger net</span>
+                        <span className="text-[#0F5132] text-sm">{usd(preview.net)}</span>
+                      </div>
                     </div>
 
                     {load.notes && (
@@ -247,22 +272,32 @@ export const FindLoads: React.FC<FindLoadsProps> = ({ currentUser, onOpenAuth })
               ) : (
                 <>
                   {(() => {
-                    const selMiles = Number(selectedLoad.miles) || 0;
-                    const selRate = Number(selectedLoad.rate_per_mile) || 0;
-                    const selGross = selMiles * selRate;
+                    const preview = settlementPreview(selectedLoad.miles, selectedLoad.rate_per_mile, config, {
+                      factored: selectedLoad.same_day_funding_offered
+                    });
                     return (
                       <div className="space-y-2 font-mono text-xs border-y-2 border-[#14171A] py-3 mb-4">
                         <div className="flex justify-between">
                           <span>Total Gross Rate:</span>
-                          <span className="font-bold">${selGross.toFixed(2)}</span>
+                          <span className="font-bold">{usd(preview.gross)}</span>
                         </div>
                         <div className="flex justify-between text-[#8C2F1B]">
-                          <span>Platform Fee ({(feePct * 100)}%):</span>
-                          <span>&minus;${(selGross * feePct).toFixed(2)}</span>
+                          <span>Platform Fee ({pctLabel(preview.feePct)}):</span>
+                          <span>&minus;{usd(preview.fee)}</span>
                         </div>
+                        <div className="flex justify-between text-[#5B6168]">
+                          <span>Modeled fuel (${preview.fuelRate.toFixed(2)}/mi):</span>
+                          <span>&minus;{usd(preview.fuel)}</span>
+                        </div>
+                        {preview.factored && (
+                          <div className="flex justify-between text-[#5B6168]">
+                            <span>Same-day factor ({pctLabel(preview.factorPct)}):</span>
+                            <span>&minus;{usd(preview.factor)}</span>
+                          </div>
+                        )}
                         <div className="flex justify-between text-[#0F5132] font-bold text-sm pt-2 border-t-2 border-dashed border-[#14171A]">
-                          <span>Carrier Take-Home:</span>
-                          <span>${(selGross * (1 - feePct)).toFixed(2)}</span>
+                          <span>Ledger net (Open Books):</span>
+                          <span>{usd(preview.net)}</span>
                         </div>
                       </div>
                     );

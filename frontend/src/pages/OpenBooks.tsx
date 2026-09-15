@@ -63,7 +63,7 @@ export const OpenBooks: React.FC = () => {
         </div>
 
         <h2 className="text-3xl sm:text-4xl mb-2">Every settlement, live, in public.</h2>
-        <p className="text-[#5B6168] font-mono text-xs sm:text-sm max-w-3xl mb-8">
+        <p className="text-[#5B6168] font-sans text-xs sm:text-sm max-w-3xl mb-8">
           This is the entire ledger of what's settled on the platform — computed directly from database aggregates. Every single load's financial breakdown is published in real time.
         </p>
 
@@ -222,7 +222,7 @@ export const OpenBooks: React.FC = () => {
                       <td className="text-[#0F5132] font-black text-sm">
                         ${Number(s.net_amount).toFixed(2)}
                         {s.factored && (
-                          <span className="text-[0.65rem] bg-[#E3A008] text-[#14171A] border border-[#14171A] px-1.5 py-0.5 ml-2 uppercase font-mono font-black">
+                          <span className="text-[0.78rem] bg-[#E3A008] text-[#14171A] border border-[#14171A] px-1.5 py-0.5 ml-2 uppercase font-mono font-black">
                             ⚡ Same-Day
                           </span>
                         )}

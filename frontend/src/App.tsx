@@ -127,6 +127,7 @@ export default function App() {
             <FindLoads
               currentUser={currentUser}
               onOpenAuth={() => setAuthModalOpen(true)}
+              setActiveTab={setActiveTab}
             />
           )}
           {activeTab === 'books' && <OpenBooks />}
@@ -142,18 +143,29 @@ export default function App() {
             <PostLoad
               currentUser={currentUser}
               onOpenAuth={() => setAuthModalOpen(true)}
+              setActiveTab={setActiveTab}
             />
           )}
           {activeTab === 'dashboard' && (
             <Dashboard
               currentUser={currentUser}
               onOpenAuth={() => setAuthModalOpen(true)}
+              onSwitchRole={() => {
+                api.logout();
+                setCurrentUser(null);
+                setAuthModalOpen(true);
+              }}
             />
           )}
           {activeTab === 'admin' && (
             <Admin
               currentUser={currentUser}
               onOpenAuth={() => setAuthModalOpen(true)}
+              onSwitchRole={() => {
+                api.logout();
+                setCurrentUser(null);
+                setAuthModalOpen(true);
+              }}
             />
           )}
         </main>

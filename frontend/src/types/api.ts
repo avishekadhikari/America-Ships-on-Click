@@ -10,6 +10,19 @@ export interface PlatformConfig {
   fuel_rate_per_mile: number;
 }
 
+export interface GeoPlace {
+  city: string;
+  state: string;
+  lat: number;
+  lng: number;
+  label: string;
+}
+
+export interface GeoRoute {
+  miles: number;
+  geometry: [number, number][];
+}
+
 export interface User {
   id: string;
   email: string;
@@ -46,6 +59,22 @@ export interface Booking {
   status: BookingStatus;
   pod_url?: string;
   delivered_at?: string;
+}
+
+export interface BookingWithLoad extends Booking {
+  origin_city: string;
+  origin_state: string;
+  dest_city: string;
+  dest_state: string;
+  miles: number;
+  rate_per_mile: number;
+  equipment_type: EquipmentType;
+  pickup_date: string;
+  same_day_funding_offered: boolean;
+  load_status: LoadStatus;
+  shipper_id: string;
+  weight_lbs?: number;
+  notes?: string;
 }
 
 export interface PublicLedgerItem {
@@ -92,4 +121,7 @@ export interface DriverOnboardInput {
   routing_number?: string;
   account_number?: string;
   same_day_funding_opt_in: boolean;
+  cdl_photo_url?: string;
+  dot_authority_url?: string;
+  coi_url?: string;
 }

@@ -1,57 +1,59 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
-import { User } from '../types/api';
+import { BookingWithLoad, User } from '../types/api';
+import { usd } from '../lib/settlementPreview';
 
 interface DashboardProps {
   currentUser: User | null;
   onOpenAuth: () => void;
+  onSwitchRole: () => void;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ currentUser, onOpenAuth }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ currentUser, onOpenAuth, onSwitchRole }) => {
   const queryClient = useQueryClient();
-  const [podInput, setPodInput] = useState<Record<string, string>>({});
+  const [podBusy, setPodBusy] = useState<Record<string, boolean>>({});
+  const [podError, setPodError] = useState<Record<string, string>>({});
 
-  // Fetch admin/detailed ledger if logged in
   const { data: adminLedger = [], isLoading: isLoadingAdmin } = useQuery({
     queryKey: ['adminLedger'],
     queryFn: () => api.getAdminLedger(),
     enabled: !!currentUser && currentUser.role === 'admin'
   });
 
-  // Fetch public/standard settlements
   const { data: settlements = [], isLoading: isLoadingSettlements } = useQuery({
     queryKey: ['settlements'],
     queryFn: () => api.getSettlements(50, 1),
     enabled: !!currentUser
   });
 
-  // Fetch active bookings/loads for drivers/shippers
-  const { data: activeLoads = [] } = useQuery({
-    queryKey: ['loads', 'active'],
-    queryFn: () => api.getLoads({ status: 'booked' }),
-    enabled: !!currentUser
+  const { data: bookings = [], isLoading: isLoadingBookings } = useQuery({
+    queryKey: ['bookings'],
+    queryFn: () => api.getBookings(),
+    enabled: !!currentUser && currentUser.role !== 'admin'
   });
 
-  // Complete booking mutation (triggers settlement)
+  const { data: allLoads = [] } = useQuery({
+    queryKey: ['loads', 'mine'],
+    queryFn: () => api.getLoads({ status: 'all' }),
+    enabled: !!currentUser && (currentUser.role === 'shipper' || currentUser.role === 'admin')
+  });
+
   const completeBookingMutation = useMutation({
     mutationFn: (bookingId: string) => api.completeBooking(bookingId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settlements'] });
+      queryClient.invalidateQueries({ queryKey: ['settlementTotals'] });
       queryClient.invalidateQueries({ queryKey: ['adminLedger'] });
       queryClient.invalidateQueries({ queryKey: ['loads'] });
-      alert('✓ Booking completed and settlement posted to Open Books!');
-    },
-    onError: (err: any) => {
-      alert(`Completion failed: ${err.message}`);
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
     }
   });
 
-  // If unauthenticated, render Auth-Gated Notice
   if (!currentUser) {
     return (
       <div className="py-16">
-        <div className="max-w-[640px] mx-auto px-6 text-center">
+        <div className="max-w-160 mx-auto px-6 text-center">
           <div className="p-8 bg-[#FAFAF7] border-2 border-[#E3A008] rounded shadow-md space-y-4">
             <span className="eyebrow block">Protected Area</span>
             <h2 className="text-2xl font-display-title text-[#14171A]">
@@ -72,9 +74,39 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentUser, onOpenAuth })
     );
   }
 
-  const handleExportCSV = () => {
-    window.location.href = api.getAdminExportUrl();
+  const handleExportCSV = async () => {
+    try {
+      await api.downloadAdminExport();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'CSV export failed');
+    }
   };
+
+  const handlePodUpload = async (bookingId: string, file: File) => {
+    setPodBusy((prev) => ({ ...prev, [bookingId]: true }));
+    setPodError((prev) => {
+      const next = { ...prev };
+      delete next[bookingId];
+      return next;
+    });
+    try {
+      const uploaded = await api.uploadFile(file);
+      await api.uploadPod(bookingId, uploaded.file_url);
+      await queryClient.invalidateQueries({ queryKey: ['bookings'] });
+    } catch (err: unknown) {
+      setPodError((prev) => ({
+        ...prev,
+        [bookingId]: err instanceof Error ? err.message : 'POD upload failed'
+      }));
+    } finally {
+      setPodBusy((prev) => ({ ...prev, [bookingId]: false }));
+    }
+  };
+
+  const myLoads = allLoads.filter((load) => load.shipper_id === currentUser.shipperId);
+  const activeBookings = bookings.filter((b) => b.status === 'active');
+  const isDriver = currentUser.role === 'driver';
+  const isShipper = currentUser.role === 'shipper';
 
   return (
     <div className="py-12">
@@ -96,13 +128,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentUser, onOpenAuth })
                 Export Ledger CSV
               </button>
             )}
-            <button onClick={onOpenAuth} className="btn amber py-2 text-xs">
+            <button onClick={onSwitchRole} className="btn amber py-2 text-xs">
               Switch Role
             </button>
           </div>
         </div>
 
-        {/* ADMIN DETAILED LEDGER */}
         {currentUser.role === 'admin' ? (
           <div className="space-y-6">
             <div className="p-3 bg-[#0F5132]/10 border border-[#0F5132] text-[#0F5132] rounded font-mono text-xs">
@@ -118,7 +149,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentUser, onOpenAuth })
                     <th>Driver Name</th>
                     <th>Shipper Company</th>
                     <th>Gross Rate</th>
-                    <th>Fee (5%)</th>
+                    <th>Fee</th>
                     <th>Net Amount</th>
                     <th>Settled Date</th>
                   </tr>
@@ -137,7 +168,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentUser, onOpenAuth })
                       </td>
                     </tr>
                   ) : (
-                    adminLedger.map((item: any) => (
+                    adminLedger.map((item: { id: string; origin_city: string; origin_state: string; dest_city: string; dest_state: string; driver_name?: string; shipper_name?: string; gross_amount: number; fee_amount: number; net_amount: number; settled_at: string }) => (
                       <tr key={item.id}>
                         <td className="font-bold text-[#5B6168]">{item.id}</td>
                         <td className="font-bold">
@@ -145,9 +176,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentUser, onOpenAuth })
                         </td>
                         <td>{item.driver_name || 'Driver'}</td>
                         <td>{item.shipper_name || 'Shipper'}</td>
-                        <td>${Number(item.gross_amount).toFixed(2)}</td>
-                        <td className="text-[#5B3D00]">${Number(item.fee_amount).toFixed(2)}</td>
-                        <td className="text-[#0F5132] font-bold">${Number(item.net_amount).toFixed(2)}</td>
+                        <td>{usd(Number(item.gross_amount))}</td>
+                        <td className="text-[#5B3D00]">{usd(Number(item.fee_amount))}</td>
+                        <td className="text-[#0F5132] font-bold">{usd(Number(item.net_amount))}</td>
                         <td>{new Date(item.settled_at).toLocaleDateString()}</td>
                       </tr>
                     ))
@@ -157,42 +188,44 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentUser, onOpenAuth })
             </div>
           </div>
         ) : (
-          /* DRIVER & SHIPPER VIEW */
           <div className="space-y-8">
-            {/* Active Bookings Action Section */}
-            {activeLoads.length > 0 && (
+            {isDriver && (
+              <ActiveBookingsPanel
+                bookings={activeBookings}
+                isLoading={isLoadingBookings}
+                podBusy={podBusy}
+                podError={podError}
+                completingId={completeBookingMutation.isPending ? String(completeBookingMutation.variables ?? '') : null}
+                completeError={completeBookingMutation.error instanceof Error ? completeBookingMutation.error.message : null}
+                onPodFile={(bookingId, file) => handlePodUpload(bookingId, file)}
+                onComplete={(bookingId) => completeBookingMutation.mutate(bookingId)}
+              />
+            )}
+
+            {isShipper && (
               <div className="bg-[#FAFAF7] border border-[#E4DCC4] rounded p-5 shadow-sm space-y-4">
-                <span className="eyebrow block">Active In-Transit Loads</span>
-                <h3 className="text-lg font-display-title">Complete Delivery &amp; Settle</h3>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {activeLoads.map((load) => (
-                    <div key={'active-' + load.id} className="p-4 bg-[#F0EAD8] border border-[#E4DCC4] rounded space-y-2 font-mono text-xs">
-                      <div className="font-bold text-sm text-[#14171A]">
-                        {load.id} · {load.origin_city}, {load.origin_state} &rarr; {load.dest_city}, {load.dest_state}
+                <span className="eyebrow block">My Loads</span>
+                <h3 className="text-lg font-display-title">Posted lanes</h3>
+                {myLoads.length === 0 ? (
+                  <p className="font-mono text-xs text-[#5B6168]">No loads posted yet.</p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {myLoads.map((load) => (
+                      <div key={load.id} className="p-4 bg-[#F0EAD8] border border-[#E4DCC4] rounded space-y-1 font-mono text-xs">
+                        <div className="font-bold text-sm text-[#14171A]">
+                          {load.id} · {load.origin_city}, {load.origin_state} &rarr; {load.dest_city}, {load.dest_state}
+                        </div>
+                        <div>Status: {load.status}</div>
+                        <div>
+                          {Number(load.miles).toLocaleString()} mi · ${Number(load.rate_per_mile).toFixed(2)}/mi
+                        </div>
                       </div>
-                      <div>Miles: {Number(load.miles)} · Rate: ${Number(load.rate_per_mile).toFixed(2)}/mi</div>
-                      <div>Gross: ${(Number(load.miles) * Number(load.rate_per_mile)).toFixed(2)}</div>
-
-                      <div className="pt-2 border-t border-[#E4DCC4] flex gap-2">
-                        <button
-                          onClick={() => {
-                            // Demo booking completion helper
-                            const demoBookingId = 'BK-HIST-0001';
-                            completeBookingMutation.mutate(demoBookingId);
-                          }}
-                          className="btn primary py-1.5 px-3 text-xs"
-                        >
-                          Trigger Settlement
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Standard Settlement Table */}
             <div>
               <h3 className="text-lg font-display-title mb-3">Settled Transaction Ledger</h3>
               <div className="ledger-table-wrap">
@@ -213,6 +246,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentUser, onOpenAuth })
                           Loading settlements...
                         </td>
                       </tr>
+                    ) : settlements.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="text-center py-6 font-mono text-[#5B6168]">
+                          No settlements posted yet.
+                        </td>
+                      </tr>
                     ) : (
                       settlements.map((s) => (
                         <tr key={s.id}>
@@ -221,8 +260,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentUser, onOpenAuth })
                           </td>
                           <td>{Number(s.miles).toLocaleString()}</td>
                           <td>${Number(s.rate_per_mile).toFixed(2)}</td>
-                          <td className="text-[#5B3D00]">${Number(s.fee_amount).toFixed(2)}</td>
-                          <td className="text-[#0F5132] font-bold">${Number(s.net_amount).toFixed(2)}</td>
+                          <td className="text-[#5B3D00]">{usd(Number(s.fee_amount))}</td>
+                          <td className="text-[#0F5132] font-bold">{usd(Number(s.net_amount))}</td>
                         </tr>
                       ))
                     )}
@@ -236,3 +275,81 @@ export const Dashboard: React.FC<DashboardProps> = ({ currentUser, onOpenAuth })
     </div>
   );
 };
+
+function ActiveBookingsPanel({
+  bookings,
+  isLoading,
+  podBusy,
+  podError,
+  completingId,
+  completeError,
+  onPodFile,
+  onComplete
+}: {
+  bookings: BookingWithLoad[];
+  isLoading: boolean;
+  podBusy: Record<string, boolean>;
+  podError: Record<string, string>;
+  completingId: string | null;
+  completeError: string | null;
+  onPodFile: (bookingId: string, file: File) => void;
+  onComplete: (bookingId: string) => void;
+}) {
+  return (
+    <div className="bg-[#FAFAF7] border border-[#E4DCC4] rounded p-5 shadow-sm space-y-4">
+      <span className="eyebrow block">Active Bookings</span>
+      <h3 className="text-lg font-display-title">Upload POD &amp; settle</h3>
+      {isLoading ? (
+        <p className="font-mono text-xs text-[#5B6168]">Loading bookings...</p>
+      ) : bookings.length === 0 ? (
+        <p className="font-mono text-xs text-[#5B6168]">No active bookings. Book a load from the board.</p>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {bookings.map((booking) => (
+            <div key={booking.id} className="p-4 bg-[#F0EAD8] border border-[#E4DCC4] rounded space-y-2 font-mono text-xs">
+              <div className="font-bold text-sm text-[#14171A]">
+                {booking.load_id} · {booking.origin_city}, {booking.origin_state} &rarr; {booking.dest_city}, {booking.dest_state}
+              </div>
+              <div>Booking {booking.id}</div>
+              <div>
+                Miles: {Number(booking.miles).toLocaleString()} · Rate: ${Number(booking.rate_per_mile).toFixed(2)}/mi
+              </div>
+              <div>Gross: {usd(Number(booking.miles) * Number(booking.rate_per_mile))}</div>
+              {booking.pod_url ? (
+                <div className="text-[#0F5132] font-bold">POD attached</div>
+              ) : (
+                <label className="block">
+                  <span className="uppercase font-bold text-[#5B6168]">Proof of delivery</span>
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    disabled={podBusy[booking.id]}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) onPodFile(booking.id, file);
+                    }}
+                    className="mt-1 block w-full text-[0.7rem]"
+                  />
+                </label>
+              )}
+              {podBusy[booking.id] && <div className="text-[#5B6168]">Uploading POD...</div>}
+              {podError[booking.id] && <div className="text-[#8C2F1B]">{podError[booking.id]}</div>}
+              {completeError && completingId === booking.id && (
+                <div className="text-[#8C2F1B]">{completeError}</div>
+              )}
+              <div className="pt-2 border-t border-[#E4DCC4]">
+                <button
+                  onClick={() => onComplete(booking.id)}
+                  disabled={completingId === booking.id}
+                  className="btn primary py-1.5 px-3 text-xs"
+                >
+                  {completingId === booking.id ? 'Settling...' : 'Complete & Post to Open Books'}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

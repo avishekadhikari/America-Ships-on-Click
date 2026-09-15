@@ -1,5 +1,19 @@
 @import "tailwindcss";
 
+/* Tailwind v4 theme tokens. These drive the font-sans/font-serif/font-mono
+   and text-xs/text-sm utilities used throughout the components. */
+@theme {
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-serif: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+
+  /* Nudged up from 0.75/0.875rem: the UI leans heavily on text-xs. */
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.45;
+  --text-sm: 0.9375rem;
+  --text-sm--line-height: 1.55;
+}
+
 :root {
   --ink: #14171A;
   --ink-2: #1E2226;
@@ -18,9 +32,8 @@
   --shadow-hard: 4px 4px 0px #14171A;
   --shadow-hard-lg: 6px 6px 0px #14171A;
   --shadow-hard-xl: 10px 10px 0px rgba(20, 23, 26, 0.12);
-  --font-display: 'Playfair Display', Georgia, serif;
-  --font-mono: 'Space Mono', 'SFMono-Regular', Consolas, monospace;
-  --font-body: 'Playfair Display', Georgia, system-ui, serif;
+  --font-display: var(--font-serif);
+  --font-body: var(--font-sans);
 }
 
 body {
@@ -28,18 +41,21 @@ body {
   background-color: var(--paper);
   color: var(--text);
   font-family: var(--font-body);
-  line-height: 1.5;
+  line-height: 1.6;
   font-size: 16px;
+  letter-spacing: 0.005em;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 h1, h2, h3, h4 {
   font-family: var(--font-display);
   font-weight: 900;
   text-transform: uppercase;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.015em;
   color: var(--ink);
-  line-height: 1.05;
+  line-height: 1.12;
 }
 
 .font-serif-title {
@@ -58,12 +74,14 @@ h1, h2, h3, h4 {
 
 .font-mono-num {
   font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
 
 .eyebrow {
   font-family: var(--font-mono);
-  font-size: 0.72rem;
-  letter-spacing: 0.14em;
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--green);
   font-weight: 700;
@@ -78,8 +96,8 @@ h1, h2, h3, h4 {
   align-items: center;
   gap: 6px;
   font-family: var(--font-mono);
-  font-size: 0.68rem;
-  letter-spacing: 0.12em;
+  font-size: 0.75rem;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
   font-weight: 700;
   color: var(--red);
@@ -92,7 +110,7 @@ h1, h2, h3, h4 {
 
 .stamp::before {
   content: "●";
-  font-size: 0.55rem;
+  font-size: 0.6rem;
 }
 
 .stamp-green {
@@ -116,8 +134,8 @@ h1, h2, h3, h4 {
   font-family: var(--font-mono);
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  font-size: 0.86rem;
   padding: 12px 20px;
   border-radius: 0px;
   cursor: pointer;
@@ -253,8 +271,8 @@ h1, h2, h3, h4 {
   left: 20px;
   background: var(--ink);
   color: var(--white);
-  font-size: 0.68rem;
-  letter-spacing: 0.1em;
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   padding: 4px 10px;
   font-family: var(--font-mono);
@@ -271,7 +289,8 @@ h1, h2, h3, h4 {
   display: flex;
   justify-content: space-between;
   padding: 8px 0;
-  font-size: 0.86rem;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
   border-bottom: 1px dashed var(--paper-line);
 }
 
@@ -296,15 +315,16 @@ table.ledger {
   width: 100%;
   border-collapse: collapse;
   font-family: var(--font-mono);
-  font-size: 0.82rem;
+  font-size: 0.88rem;
+  font-variant-numeric: tabular-nums;
 }
 
 table.ledger thead th {
   text-align: left;
   background: var(--ink);
   color: var(--paper);
-  font-size: 0.7rem;
-  letter-spacing: 0.08em;
+  font-size: 0.76rem;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   padding: 12px 14px;
   font-weight: 700;
@@ -346,5 +366,139 @@ table.ledger tbody tr:hover {
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
   }
+}
+
+/* Post Load lane map */
+.lane-map-wrap {
+  position: relative;
+}
+
+.lane-map {
+  height: 340px;
+  width: 100%;
+  border: 2px solid var(--ink);
+  box-shadow: var(--shadow-hard);
+  border-radius: 2px;
+  background: var(--paper-dark);
+  z-index: 0;
+}
+
+.lane-map .leaflet-container {
+  height: 100%;
+  width: 100%;
+  font-family: var(--font-mono);
+  background: var(--paper-dark);
+}
+
+.lane-map .leaflet-control-attribution {
+  font-size: 10px;
+  background: rgba(250, 250, 247, 0.92) !important;
+}
+
+.lane-map-status {
+  margin: 8px 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.lane-search-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.lane-search.is-active .lane-search-tab {
+  color: var(--green);
+}
+
+.lane-search-letter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--white);
+  font-size: 0.65rem;
+}
+
+.lane-search.is-active .lane-search-letter {
+  background: var(--green);
+}
+
+.lane-suggest {
+  position: absolute;
+  z-index: 1200;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  background: var(--white);
+  border: 2px solid var(--ink);
+  box-shadow: var(--shadow-hard);
+}
+
+.lane-suggest button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  background: transparent;
+}
+
+.lane-suggest button:hover,
+.lane-suggest button:focus {
+  background: var(--paper);
+}
+
+.lane-pin {
+  background: none !important;
+  border: none !important;
+}
+
+.lane-pin-dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  color: #fafaf7;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  border: 2px solid #14171a;
+  box-shadow: 2px 2px 0 #14171a;
+}
+
+.lane-pin-dot.origin {
+  background: #0f5132;
+}
+
+.lane-pin-dot.dest {
+  background: #e3a008;
+  color: #14171a;
+}
+
+.lane-pin-letter {
+  display: block;
+  transform: rotate(45deg);
+  line-height: 1;
 }
 

@@ -14,7 +14,7 @@ export const Footer: React.FC<FooterProps> = ({ setActiveTab, feePct = 0.05 }) =
             <h4 className="text-[#E3A008] font-serif font-black text-sm tracking-widest uppercase mb-3">
               America Ships On Click
             </h4>
-            <p className="max-w-[32ch] text-[#F0EAD8]/80 text-xs font-mono leading-relaxed">
+            <p className="max-w-[32ch] text-[#F0EAD8]/80 text-xs font-sans leading-relaxed">
               A no-broker load board with a public settlement ledger. Direct booking between shippers and motor carriers without hidden broker markups.
             </p>
           </div>
@@ -48,7 +48,7 @@ export const Footer: React.FC<FooterProps> = ({ setActiveTab, feePct = 0.05 }) =
             </ul>
           </div>
         </div>
-        <div className="border-t border-[#F0EAD8]/20 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 font-mono text-[0.72rem] text-[#F0EAD8]/60">
+        <div className="border-t border-[#F0EAD8]/20 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 font-mono text-[0.78rem] text-[#F0EAD8]/60">
           <div>
             FULL-STACK API RUNTIME · REAL-TIME OPEN BOOKS LEDGER. Live PostgreSQL data &amp; SSE events.
           </div>

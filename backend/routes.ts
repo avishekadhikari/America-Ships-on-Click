@@ -7,6 +7,7 @@ import fs from 'fs';
 import { db, type SessionContext } from '../database';
 import { authenticate, generateToken, requireRole, AuthenticatedRequest } from './auth';
 import { accountLast4, clientIp, newId, sessionContextFor, tokenizeBankAccount } from './security';
+import { drivingRoute, reversePlace, searchPlaces } from './geo';
 
 export const apiRouter = Router();
 
@@ -107,6 +108,65 @@ apiRouter.get('/config', async (req, res) => {
 });
 
 // -------------------------------------------------------------
+// 1b. GEO — US city search, reverse geocode, driving miles
+// -------------------------------------------------------------
+const geoSearchSchema = z.object({
+  q: z.string().trim().min(2).max(80)
+});
+
+const geoCoordSchema = z.object({
+  lat: z.coerce.number().gte(18).lte(72),
+  lng: z.coerce.number().gte(-180).lte(-66)
+});
+
+apiRouter.get('/geo/search', async (req, res) => {
+  try {
+    const { q } = geoSearchSchema.parse(req.query);
+    const results = await searchPlaces(q);
+    res.json({ results });
+  } catch (err: any) {
+    if (err instanceof z.ZodError) {
+      res.status(400).json({ error: 'Enter at least two characters for a US city.' });
+      return;
+    }
+    res.status(502).json({ error: err.message || 'City lookup failed' });
+  }
+});
+
+apiRouter.get('/geo/reverse', async (req, res) => {
+  try {
+    const { lat, lng } = geoCoordSchema.parse(req.query);
+    const place = await reversePlace(lat, lng);
+    if (!place) {
+      res.status(404).json({ error: 'Drop the pin on a US city.' });
+      return;
+    }
+    res.json({ place });
+  } catch (err: any) {
+    if (err instanceof z.ZodError) {
+      res.status(400).json({ error: 'Invalid map coordinates.' });
+      return;
+    }
+    res.status(502).json({ error: err.message || 'Reverse geocode failed' });
+  }
+});
+
+apiRouter.get('/geo/route', async (req, res) => {
+  try {
+    const from = geoCoordSchema.parse({ lat: req.query.fromLat, lng: req.query.fromLng });
+    const to = geoCoordSchema.parse({ lat: req.query.toLat, lng: req.query.toLng });
+    const route = await drivingRoute(from, to);
+    res.json(route);
+  } catch (err: any) {
+    if (err instanceof z.ZodError) {
+      res.status(400).json({ error: 'Need two US points to measure the lane.' });
+      return;
+    }
+    res.status(502).json({ error: err.message || 'Route lookup failed' });
+  }
+});
+
+// -------------------------------------------------------------
 // 2. AUTH ENDPOINTS
 // -------------------------------------------------------------
 // Public signup mints carrier and shipper accounts only.
@@ -155,7 +215,7 @@ apiRouter.post('/auth/signup', async (req, res) => {
         driverId = newId('drv');
         await tx.query(`
           INSERT INTO driver_profiles (id, user_id, full_name, home_base_city, home_base_state, verification_status)
-          VALUES ($1, $2, $3, $4, $5, 'verified')
+          VALUES ($1, $2, $3, $4, $5, 'pending')
         `, [driverId, userId, body.name, body.home_city || 'Dallas', body.home_state || 'TX']);
 
         await tx.query(`
@@ -424,6 +484,26 @@ apiRouter.post('/loads', authenticate, requireRole('shipper', 'admin'), async (r
 // -------------------------------------------------------------
 // 4. BOOKINGS ENDPOINTS (TRANSACTIONAL LOCKING TO PREVENT DOUBLE BOOKING)
 // -------------------------------------------------------------
+// RLS already scopes this: a driver sees their own bookings, a shipper sees
+// bookings on their loads, an admin sees all. No extra policy.
+apiRouter.get('/bookings', authenticate, async (req: AuthenticatedRequest, res) => {
+  try {
+    const result = await scoped(req).query(`
+      SELECT
+        b.id, b.load_id, b.driver_id, b.booked_at, b.status, b.pod_url, b.delivered_at,
+        l.origin_city, l.origin_state, l.dest_city, l.dest_state,
+        l.miles, l.rate_per_mile, l.equipment_type, l.pickup_date,
+        l.same_day_funding_offered, l.status AS load_status, l.shipper_id, l.weight_lbs, l.notes
+      FROM bookings b
+      JOIN loads l ON l.id = b.load_id
+      ORDER BY b.booked_at DESC
+    `);
+    res.json({ bookings: result.rows });
+  } catch (err: any) {
+    sendError(res, err);
+  }
+});
+
 apiRouter.post('/bookings', authenticate, requireRole('driver', 'admin'), async (req: AuthenticatedRequest, res) => {
   try {
     const { load_id } = req.body;
@@ -654,7 +734,10 @@ const driverOnboardSchema = z.object({
   trailer_length_ft: z.number().optional().default(53),
   routing_number: z.string().optional(),
   account_number: z.string().optional(),
-  same_day_funding_opt_in: z.boolean().default(false)
+  same_day_funding_opt_in: z.boolean().default(false),
+  cdl_photo_url: z.string().min(1).optional(),
+  dot_authority_url: z.string().min(1).optional(),
+  coi_url: z.string().min(1).optional()
 });
 
 /**
@@ -720,6 +803,20 @@ apiRouter.post('/drivers/onboard', authenticate, requireRole('driver', 'admin'),
         await tx.query(
           'UPDATE driver_payment_accounts SET same_day_funding_opt_in = $1 WHERE driver_id = $2',
           [body.same_day_funding_opt_in, driverId]
+        );
+      }
+
+      const documents: Array<{ type: 'cdl_photo' | 'dot_authority' | 'coi'; url?: string }> = [
+        { type: 'cdl_photo', url: body.cdl_photo_url },
+        { type: 'dot_authority', url: body.dot_authority_url },
+        { type: 'coi', url: body.coi_url }
+      ];
+      for (const doc of documents) {
+        if (!doc.url) continue;
+        await tx.query(
+          `INSERT INTO driver_documents (id, driver_id, doc_type, file_url)
+           VALUES ($1, $2, $3, $4)`,
+          [newId('doc'), driverId, doc.type, doc.url]
         );
       }
 

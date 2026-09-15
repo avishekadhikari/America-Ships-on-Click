@@ -23,7 +23,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   // Fetch recent settlements for the live ticker
   const { data: tickerSettlements = [] } = useQuery({
     queryKey: ['settlements'],
-    queryFn: () => api.getSettlements(6, 1),
+    queryFn: () => api.getSettlements(50, 1),
     refetchInterval: 12000
   });
 
@@ -54,7 +54,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
           <span className="font-serif font-black text-xl tracking-tight uppercase leading-none text-[#F0EAD8]">
             America Ships On Click
-            <small className="block font-mono text-[#E3A008] text-[0.62rem] font-bold tracking-widest mt-1">
+            <small className="block font-mono text-[#E3A008] text-[0.78rem] font-bold tracking-widest mt-1">
               NO BROKERS · OPEN BOOKS LEDGER
             </small>
           </span>
@@ -102,7 +102,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="pt-3 md:pt-0 border-t md:border-t-0 border-[#F0EAD8]/20 flex items-center gap-3">
             {currentUser ? (
               <div className="flex items-center gap-2 font-mono text-xs">
-                <span className="bg-[#0F5132] text-[#F0EAD8] border border-[#F0EAD8]/40 px-2 py-0.5 font-bold uppercase text-[0.68rem]">
+                <span className="bg-[#0F5132] text-[#F0EAD8] border border-[#F0EAD8]/40 px-2 py-0.5 font-bold uppercase text-[0.74rem]">
                   {currentUser.role}
                 </span>
                 <button
@@ -115,7 +115,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             ) : (
               <button
                 onClick={onOpenAuth}
-                className="btn amber py-1.5 px-3 text-[0.72rem]"
+                className="btn amber py-1.5 px-3 text-[0.78rem]"
               >
                 Sign In
               </button>
@@ -128,7 +128,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       <div className="bg-[#E3A008] text-[#14171A] py-1.5 border-t border-[#14171A] overflow-hidden whitespace-nowrap flex items-center">
         <div className="flex animate-none px-4 text-[10px] font-mono font-bold uppercase gap-8 overflow-x-auto no-scrollbar w-full">
           {tickerSettlements.length > 0 ? (
-            tickerSettlements.map((s, i) => (
+            tickerSettlements.slice(0, 6).map((s, i) => (
               <span key={'ticker-' + s.id + '-' + i} className="flex-none flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#8C2F1B]"></span>
                 <span>LATEST SETTLEMENT:</span>
@@ -138,7 +138,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </span>
             ))
           ) : (
-            <span>LATEST SETTLEMENT: CHICAGO, IL &rarr; DENVER, CO • $3.42/MILE • CARRIER NET: $2,840.10</span>
+            <span>No settlements yet</span>
           )}
         </div>
       </div>
