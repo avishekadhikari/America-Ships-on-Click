@@ -2,6 +2,7 @@ export type UserRole = 'driver' | 'shipper' | 'admin';
 export type EquipmentType = 'dry_van' | 'reefer' | 'flatbed' | 'step_deck' | 'power_only';
 export type LoadStatus = 'open' | 'booked' | 'in_transit' | 'delivered' | 'cancelled';
 export type BookingStatus = 'active' | 'completed' | 'cancelled';
+export type VvipRole = 'shipper' | 'carrier' | 'fleet' | 'other';
 
 export interface PlatformConfig {
   fee_pct: number;

@@ -11,6 +11,7 @@ import { DriveWithUs } from './pages/DriveWithUs';
 import { PostLoad } from './pages/PostLoad';
 import { Dashboard } from './pages/Dashboard';
 import { Admin } from './pages/Admin';
+import { GoldenVvip } from './pages/GoldenVvip';
 
 import { api } from './lib/api';
 import { User } from './types/api';
@@ -37,7 +38,8 @@ const TAB_PATHS: Record<string, string> = {
   driver: '/drive',
   shipper: '/post-load',
   dashboard: '/dashboard',
-  admin: '/admin'
+  admin: '/admin',
+  vvip: '/vvip'
 };
 
 const PATH_TABS: Record<string, string> = Object.fromEntries(
@@ -110,6 +112,9 @@ export default function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      {activeTab === 'vvip' ? (
+        <GoldenVvip />
+      ) : (
       <div className="min-h-screen flex flex-col bg-[#F0EAD8] text-[#22262A] font-sans antialiased">
         {/* Navigation Bar */}
         <Navbar
@@ -180,6 +185,7 @@ export default function App() {
           onSuccess={(user) => setCurrentUser(user)}
         />
       </div>
+      )}
     </QueryClientProvider>
   );
 }

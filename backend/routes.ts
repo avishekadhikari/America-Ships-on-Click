@@ -167,6 +167,102 @@ apiRouter.get('/geo/route', async (req, res) => {
 });
 
 // -------------------------------------------------------------
+// 1c. GOLDEN VVIP — interest list only, no accounts
+// -------------------------------------------------------------
+const VVIP_ROLES = ['shipper', 'carrier', 'fleet', 'other'] as const;
+
+const vvipSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required').max(80),
+  email: z.string().trim().email('Enter a valid email').max(254),
+  who_you_are: z.enum(VVIP_ROLES),
+  location: z.string().trim().min(1, 'Location is required').max(120),
+  // Honeypot. Real browsers leave it empty; bots that fill it get a fake OK.
+  website: z.string().max(200).optional()
+});
+
+type VvipLeadNotify = {
+  name: string;
+  email: string;
+  who_you_are: (typeof VVIP_ROLES)[number];
+  location: string;
+};
+
+/** Forwards a new lead to the founder inbox path without blocking the form. */
+function notifyVvipLead(lead: VvipLeadNotify): void {
+  const inbox = process.env.VVIP_INBOX_EMAIL || process.env.ADMIN_EMAIL || 'unset';
+  console.log(
+    `[VVIP] Pre-register for ${inbox}: ${lead.name} <${lead.email}> · ${lead.who_you_are} · ${lead.location}`
+  );
+
+  const url = process.env.VVIP_NOTIFY_URL;
+  if (!url) return;
+
+  void fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...lead, inbox, source: 'asoc-vvip' }),
+    signal: AbortSignal.timeout(5000)
+  }).catch((err: unknown) => {
+    const message = err instanceof Error ? err.message : 'unknown error';
+    console.error('[VVIP] Notify webhook failed:', message);
+  });
+}
+
+apiRouter.post('/vvip/preregister', async (req, res) => {
+  try {
+    const body = vvipSchema.parse(req.body);
+    if (body.website && body.website.trim().length > 0) {
+      return res.json({ ok: true });
+    }
+
+    const ip = clientIp(req);
+    const anon = db.as({ role: 'anon' });
+
+    const limitRes = await anon.query<{
+      allowed: boolean;
+      remaining: number;
+      retry_after: number;
+    }>('SELECT allowed, remaining, retry_after FROM app_rate_limit_hit($1, $2, $3)', [
+      `vvip:${ip}`,
+      8,
+      3600
+    ]);
+    const limit = limitRes.rows[0];
+    if (limit && !limit.allowed) {
+      res.setHeader('Retry-After', String(limit.retry_after || 3600));
+      return res.status(429).json({
+        error: 'Too many submissions from this network. Try again in an hour.',
+        retry_after_seconds: limit.retry_after
+      });
+    }
+
+    const email = body.email.toLowerCase();
+    const inserted = await anon.query<{ created: boolean }>(
+      'SELECT app_vvip_preregister($1, $2, $3, $4, $5, $6) AS created',
+      [newId('vvip'), body.name, email, body.who_you_are, body.location, ip]
+    );
+
+    if (inserted.rows[0]?.created) {
+      notifyVvipLead({
+        name: body.name,
+        email,
+        who_you_are: body.who_you_are,
+        location: body.location
+      });
+      return res.json({ ok: true });
+    }
+
+    return res.json({ ok: true, already_on_list: true });
+  } catch (err: any) {
+    if (err instanceof z.ZodError) {
+      const first = err.issues[0];
+      return res.status(400).json({ error: first?.message || 'Check the form and try again.' });
+    }
+    sendError(res, err);
+  }
+});
+
+// -------------------------------------------------------------
 // 2. AUTH ENDPOINTS
 // -------------------------------------------------------------
 // Public signup mints carrier and shipper accounts only.
@@ -939,6 +1035,19 @@ apiRouter.get('/admin/export', authenticate, requireRole('admin'), async (req: A
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="open-books-ledger-export.csv"');
     res.send(csvContent);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+apiRouter.get('/admin/vvip-leads', authenticate, requireRole('admin'), async (req: AuthenticatedRequest, res) => {
+  try {
+    const rows = await scoped(req).query(
+      `SELECT id, name, email, who_you_are, location, ip_address, created_at
+       FROM vvip_leads
+       ORDER BY created_at DESC`
+    );
+    res.json({ leads: rows.rows });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

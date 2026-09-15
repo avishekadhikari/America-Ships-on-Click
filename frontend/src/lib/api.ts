@@ -8,7 +8,8 @@ import {
   PublicLedgerItem,
   SettlementTotals,
   DriverOnboardInput,
-  User
+  User,
+  VvipRole
 } from '../types/api';
 
 const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || '/api';
@@ -236,5 +237,20 @@ export const api = {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
+  },
+
+  async preregisterVvip(data: {
+    name: string;
+    email: string;
+    who_you_are: VvipRole;
+    location: string;
+    website?: string;
+  }): Promise<{ ok: true; already_on_list?: boolean }> {
+    const res = await fetch(`${API_BASE}/vvip/preregister`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    return handleResponse<{ ok: true; already_on_list?: boolean }>(res);
   }
 };

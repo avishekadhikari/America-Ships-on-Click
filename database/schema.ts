@@ -145,3 +145,15 @@ export interface PlatformConfig {
   broker_comparison_pct: number;
   fuel_rate_per_mile: number;
 }
+
+export type VvipRole = 'shipper' | 'carrier' | 'fleet' | 'other';
+
+export interface VvipLead {
+  id: string;
+  name: string;
+  email: string;
+  who_you_are: VvipRole;
+  location: string;
+  ip_address?: string;
+  created_at: string;
+}
