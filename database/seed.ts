@@ -123,26 +123,30 @@ async function seedUsers(tx: Queryable, passwordHash: string): Promise<void> {
 
 async function seedOpenLoads(tx: Queryable): Promise<void> {
   const initialLoads = [
-    { id: 'LD-1042', origin_city: 'Dallas', origin_state: 'TX', dest_city: 'Atlanta', dest_state: 'GA', miles: 780, rate: 2.15, equip: 'dry_van', pickup: '2026-08-04', weight: 41900, notes: '26 pallets non-hazmat' },
-    { id: 'LD-1043', origin_city: 'Chicago', origin_state: 'IL', dest_city: 'Memphis', dest_state: 'TN', miles: 530, rate: 2.45, equip: 'reefer', pickup: '2026-08-03', weight: 38200, notes: 'Continuous temp 34F' },
-    { id: 'LD-1044', origin_city: 'Los Angeles', origin_state: 'CA', dest_city: 'Phoenix', dest_state: 'AZ', miles: 370, rate: 2.90, equip: 'flatbed', pickup: '2026-08-05', weight: 44000, notes: 'Straps and tarp required' },
-    { id: 'LD-1045', origin_city: 'Laredo', origin_state: 'TX', dest_city: 'Chicago', dest_state: 'IL', miles: 1240, rate: 2.20, equip: 'dry_van', pickup: '2026-08-06', weight: 40000, notes: 'Clean trailer required' },
-    { id: 'LD-1046', origin_city: 'Charlotte', origin_state: 'NC', dest_city: 'Miami', dest_state: 'FL', miles: 650, rate: 2.35, equip: 'reefer', pickup: '2026-08-04', weight: 36500, notes: 'Pre-cooled to 36F' },
-    { id: 'LD-1047', origin_city: 'Columbus', origin_state: 'OH', dest_city: 'Newark', dest_state: 'NJ', miles: 530, rate: 2.60, equip: 'step_deck', pickup: '2026-08-07', weight: 42800, notes: 'Overheight machinery' },
-    { id: 'LD-1048', origin_city: 'Seattle', origin_state: 'WA', dest_city: 'Denver', dest_state: 'CO', miles: 1020, rate: 2.30, equip: 'dry_van', pickup: '2026-08-05', weight: 39600, notes: 'No hazmat' },
-    { id: 'LD-1049', origin_city: 'Houston', origin_state: 'TX', dest_city: 'Nashville', dest_state: 'TN', miles: 780, rate: 2.50, equip: 'flatbed', pickup: '2026-08-06', weight: 45000, notes: 'Steel coils' },
-    { id: 'LD-1050', origin_city: 'Indianapolis', origin_state: 'IN', dest_city: 'Kansas City', dest_state: 'MO', miles: 490, rate: 2.75, equip: 'power_only', pickup: '2026-08-03', weight: 0, notes: 'Pre-loaded trailer drop' },
-    { id: 'LD-1051', origin_city: 'Savannah', origin_state: 'GA', dest_city: 'Charlotte', dest_state: 'NC', miles: 260, rate: 3.05, equip: 'dry_van', pickup: '2026-08-04', weight: 37100, notes: 'Port pickup' },
-    { id: 'LD-1052', origin_city: 'Ontario', origin_state: 'CA', dest_city: 'Salt Lake City', dest_state: 'UT', miles: 700, rate: 2.20, equip: 'reefer', pickup: '2026-08-08', weight: 40900, notes: 'Frozen food -10F' },
-    { id: 'LD-1053', origin_city: 'Harrisburg', origin_state: 'PA', dest_city: 'Boston', dest_state: 'MA', miles: 370, rate: 2.65, equip: 'dry_van', pickup: '2026-08-05', weight: 41200, notes: 'Live load' }
+    { id: 'LD-1042', origin_city: 'Dallas', origin_state: 'TX', origin_lat: 32.7767, origin_lng: -96.7970, dest_city: 'Atlanta', dest_state: 'GA', dest_lat: 33.7490, dest_lng: -84.3880, miles: 780, rate: 2.15, equip: 'dry_van', pickup: '2026-08-04', weight: 41900, notes: '26 pallets non-hazmat' },
+    { id: 'LD-1043', origin_city: 'Chicago', origin_state: 'IL', origin_lat: 41.8781, origin_lng: -87.6298, dest_city: 'Memphis', dest_state: 'TN', dest_lat: 35.1495, dest_lng: -90.0490, miles: 530, rate: 2.45, equip: 'reefer', pickup: '2026-08-03', weight: 38200, notes: 'Continuous temp 34F' },
+    { id: 'LD-1044', origin_city: 'Los Angeles', origin_state: 'CA', origin_lat: 34.0522, origin_lng: -118.2437, dest_city: 'Phoenix', dest_state: 'AZ', dest_lat: 33.4484, dest_lng: -112.0740, miles: 370, rate: 2.90, equip: 'flatbed', pickup: '2026-08-05', weight: 44000, notes: 'Straps and tarp required' },
+    { id: 'LD-1045', origin_city: 'Laredo', origin_state: 'TX', origin_lat: 27.5306, origin_lng: -99.4803, dest_city: 'Chicago', dest_state: 'IL', dest_lat: 41.8781, dest_lng: -87.6298, miles: 1240, rate: 2.20, equip: 'dry_van', pickup: '2026-08-06', weight: 40000, notes: 'Clean trailer required' },
+    { id: 'LD-1046', origin_city: 'Charlotte', origin_state: 'NC', origin_lat: 35.2271, origin_lng: -80.8431, dest_city: 'Miami', dest_state: 'FL', dest_lat: 25.7617, dest_lng: -80.1918, miles: 650, rate: 2.35, equip: 'reefer', pickup: '2026-08-04', weight: 36500, notes: 'Pre-cooled to 36F' },
+    { id: 'LD-1047', origin_city: 'Columbus', origin_state: 'OH', origin_lat: 39.9612, origin_lng: -82.9988, dest_city: 'Newark', dest_state: 'NJ', dest_lat: 40.7357, dest_lng: -74.1724, miles: 530, rate: 2.60, equip: 'step_deck', pickup: '2026-08-07', weight: 42800, notes: 'Overheight machinery' },
+    { id: 'LD-1048', origin_city: 'Seattle', origin_state: 'WA', origin_lat: 47.6062, origin_lng: -122.3321, dest_city: 'Denver', dest_state: 'CO', dest_lat: 39.7392, dest_lng: -104.9903, miles: 1020, rate: 2.30, equip: 'dry_van', pickup: '2026-08-05', weight: 39600, notes: 'No hazmat' },
+    { id: 'LD-1049', origin_city: 'Houston', origin_state: 'TX', origin_lat: 29.7604, origin_lng: -95.3698, dest_city: 'Nashville', dest_state: 'TN', dest_lat: 36.1627, dest_lng: -86.7816, miles: 780, rate: 2.50, equip: 'flatbed', pickup: '2026-08-06', weight: 45000, notes: 'Steel coils' },
+    { id: 'LD-1050', origin_city: 'Indianapolis', origin_state: 'IN', origin_lat: 39.7684, origin_lng: -86.1581, dest_city: 'Kansas City', dest_state: 'MO', dest_lat: 39.0997, dest_lng: -94.5786, miles: 490, rate: 2.75, equip: 'power_only', pickup: '2026-08-03', weight: 0, notes: 'Pre-loaded trailer drop' },
+    { id: 'LD-1051', origin_city: 'Savannah', origin_state: 'GA', origin_lat: 32.0809, origin_lng: -81.0912, dest_city: 'Charlotte', dest_state: 'NC', dest_lat: 35.2271, dest_lng: -80.8431, miles: 260, rate: 3.05, equip: 'dry_van', pickup: '2026-08-04', weight: 37100, notes: 'Port pickup' },
+    { id: 'LD-1052', origin_city: 'Ontario', origin_state: 'CA', origin_lat: 34.0633, origin_lng: -117.6509, dest_city: 'Salt Lake City', dest_state: 'UT', dest_lat: 40.7608, dest_lng: -111.8910, miles: 700, rate: 2.20, equip: 'reefer', pickup: '2026-08-08', weight: 40900, notes: 'Frozen food -10F' },
+    { id: 'LD-1053', origin_city: 'Harrisburg', origin_state: 'PA', origin_lat: 40.2732, origin_lng: -76.8867, dest_city: 'Boston', dest_state: 'MA', dest_lat: 42.3601, dest_lng: -71.0589, miles: 370, rate: 2.65, equip: 'dry_van', pickup: '2026-08-05', weight: 41200, notes: 'Live load' }
   ];
 
   for (const l of initialLoads) {
     await tx.query(`
-      INSERT INTO loads (id, shipper_id, origin_city, origin_state, dest_city, dest_state, miles, rate_per_mile, equipment_type, pickup_date, weight_lbs, notes, same_day_funding_offered, status)
-      VALUES ($1, 'shp-001', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, TRUE, 'open')
+      INSERT INTO loads (
+        id, shipper_id, origin_city, origin_state, dest_city, dest_state,
+        origin_lat, origin_lng, dest_lat, dest_lng,
+        miles, rate_per_mile, equipment_type, pickup_date, weight_lbs, notes, same_day_funding_offered, status
+      )
+      VALUES ($1, 'shp-001', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, TRUE, 'open')
       ON CONFLICT DO NOTHING
-    `, [l.id, l.origin_city, l.origin_state, l.dest_city, l.dest_state, l.miles, l.rate, l.equip, l.pickup, l.weight, l.notes]);
+    `, [l.id, l.origin_city, l.origin_state, l.dest_city, l.dest_state, l.origin_lat, l.origin_lng, l.dest_lat, l.dest_lng, l.miles, l.rate, l.equip, l.pickup, l.weight, l.notes]);
   }
 }
 

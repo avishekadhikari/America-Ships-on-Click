@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { LoadBoardMap } from '../components/LoadBoardMap';
 import { api } from '../lib/api';
+import { lanePlace } from '../lib/laneCoords';
 import { Load, User } from '../types/api';
 import { pctLabel, settlementPreview, usd } from '../lib/settlementPreview';
 
@@ -8,10 +10,6 @@ interface FindLoadsProps {
   currentUser: User | null;
   onOpenAuth: () => void;
   setActiveTab: (tab: string) => void;
-}
-
-function lanePlace(city: string, state: string, address?: string): string {
-  return address || `${city}, ${state}`;
 }
 
 export const FindLoads: React.FC<FindLoadsProps> = ({ currentUser, onOpenAuth, setActiveTab }) => {
@@ -23,6 +21,7 @@ export const FindLoads: React.FC<FindLoadsProps> = ({ currentUser, onOpenAuth, s
   const [minRate, setMinRate] = useState('');
 
   const [selectedLoad, setSelectedLoad] = useState<Load | null>(null);
+  const [focusedLoadId, setFocusedLoadId] = useState<string | null>(null);
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [bookingSuccess, setBookingSuccess] = useState<boolean>(false);
 
@@ -77,10 +76,19 @@ export const FindLoads: React.FC<FindLoadsProps> = ({ currentUser, onOpenAuth, s
       alert('Only driver accounts can book loads. Please switch to a driver account.');
       return;
     }
+    setFocusedLoadId(load.id);
     setSelectedLoad(load);
     setBookingError(null);
     setBookingSuccess(false);
   };
+
+  useEffect(() => {
+    if (loads.length === 0) {
+      setFocusedLoadId(null);
+      return;
+    }
+    setFocusedLoadId((prev) => (prev && loads.some((load) => load.id === prev) ? prev : loads[0].id));
+  }, [loads]);
 
   useEffect(() => {
     if (!selectedLoad) return;
@@ -97,7 +105,7 @@ export const FindLoads: React.FC<FindLoadsProps> = ({ currentUser, onOpenAuth, s
         <span className="eyebrow block mb-1">Find Freight</span>
         <h2 className="text-3xl sm:text-4xl mb-2">Available Load Board</h2>
         <p className="text-[#5B6168] font-sans text-xs sm:text-sm mb-8">
-          Filter open loads by the pickup the shipper set — exact address, street, ZIP, or city — and by equipment. Ledger net is the same math Open Books will publish: gross minus the {config ? pctLabel(config.fee_pct) : '5%'} platform fee, modeled fuel, and optional same-day factor.
+          Open loads plot on the map at the pickup the shipper dropped. Tap a mile pin to see the dock, the drop, and the lane. Filter by address, street, ZIP, city, or equipment. Ledger net is the same math Open Books will publish: gross minus the {config ? pctLabel(config.fee_pct) : '5%'} platform fee, modeled fuel, and optional same-day factor.
         </p>
 
         {/* Tactile Filter Bar */}
@@ -178,6 +186,15 @@ export const FindLoads: React.FC<FindLoadsProps> = ({ currentUser, onOpenAuth, s
             No loads match your search criteria. Try widening your filters.
           </div>
         ) : (
+          <>
+          <LoadBoardMap
+            loads={loads}
+            focusedId={focusedLoadId}
+            catalog={catalog}
+            config={config}
+            onFocus={setFocusedLoadId}
+            onBook={handleBookClick}
+          />
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {loads.map((load) => {
               const preview = settlementPreview(load.miles, load.rate_per_mile, config, {
@@ -185,9 +202,15 @@ export const FindLoads: React.FC<FindLoadsProps> = ({ currentUser, onOpenAuth, s
               });
               const pickup = lanePlace(load.origin_city, load.origin_state, load.origin_address);
               const drop = lanePlace(load.dest_city, load.dest_state, load.dest_address);
+              const focused = focusedLoadId === load.id;
 
               return (
-                <div key={load.id} className="bg-[#FAFAF7] border-2 border-[#14171A] p-5 shadow-[4px_4px_0px_#14171A] flex flex-col justify-between gap-4">
+                <div
+                  key={load.id}
+                  id={`load-${load.id}`}
+                  onClick={() => setFocusedLoadId(load.id)}
+                  className={`border-2 border-[#14171A] p-5 shadow-[4px_4px_0px_#14171A] flex flex-col justify-between gap-4 cursor-pointer ${focused ? 'bg-[#F4F7F2] outline outline-2 outline-[#0F5132] -outline-offset-2' : 'bg-[#FAFAF7]'}`}
+                >
                   <div>
                     <div className="flex justify-between items-start mb-3">
                       <span className="font-serif font-black text-xl uppercase leading-tight text-[#14171A]">
@@ -248,7 +271,11 @@ export const FindLoads: React.FC<FindLoadsProps> = ({ currentUser, onOpenAuth, s
                   </div>
 
                   <button
-                    onClick={() => handleBookClick(load)}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleBookClick(load);
+                    }}
                     className="btn primary block w-full py-3 text-xs"
                   >
                     Book Load Direct
@@ -257,6 +284,7 @@ export const FindLoads: React.FC<FindLoadsProps> = ({ currentUser, onOpenAuth, s
               );
             })}
           </div>
+          </>
         )}
 
         {/* BOOKING MODAL */}
