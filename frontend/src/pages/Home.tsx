@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { useRealtimeSettlements } from '../lib/useRealtimeSettlements';
 import { pctLabel, settlementPreview, usd } from '../lib/settlementPreview';
+import { followTabLink } from '../lib/routes';
 
 interface HomeProps {
   setActiveTab: (tab: string) => void;
@@ -64,19 +65,21 @@ export const Home: React.FC<HomeProps> = ({ setActiveTab }) => {
               The first trucking platform with a public settlement ledger. We take {feePctLabel}. Shippers pay less, drivers make more. Everyone sees the math.
             </p>
 
-            <div className="flex flex-wrap gap-4 mb-10">
-              <button
+            <div className="flex flex-col items-start gap-3 mb-10">
+              <a
+                href="/loads"
                 className="btn primary py-3.5 px-6"
-                onClick={() => setActiveTab('loads')}
+                onClick={(e) => followTabLink(e, setActiveTab, 'loads')}
               >
                 Find Loads
-              </button>
-              <button
-                className="btn ghost py-3.5 px-6"
-                onClick={() => setActiveTab('books')}
+              </a>
+              <a
+                href="/books"
+                className="font-mono text-xs font-bold uppercase tracking-widest text-[#0F5132] underline underline-offset-4"
+                onClick={(e) => followTabLink(e, setActiveTab, 'books')}
               >
-                Open Books Ledger
-              </button>
+                Read the open books
+              </a>
             </div>
           </div>
 
@@ -150,7 +153,7 @@ export const Home: React.FC<HomeProps> = ({ setActiveTab }) => {
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-[8px] font-mono opacity-60 uppercase font-bold">Status</div>
+                  <div className="text-[11px] font-mono uppercase font-bold text-[#5B6168]">Status</div>
                   <div className="text-[10px] font-mono text-[#0F5132] font-bold">LIVE SETTLED</div>
                 </div>
               </div>
@@ -174,7 +177,7 @@ export const Home: React.FC<HomeProps> = ({ setActiveTab }) => {
                   <span>PLATFORM FEE ({pctLabel(Number(topSettlement.fee_pct_applied) || sample.feePct)}):</span>
                   <span>&minus; {usd(Number(topSettlement.fee_amount || 0))}</span>
                 </div>
-                <div className="flex justify-between border-b border-dashed border-[#14171A]/20 py-1 opacity-70">
+                <div className="flex justify-between border-b border-dashed border-[#14171A]/20 py-1 text-[#3E444A]">
                   <span>MODELED FUEL:</span>
                   <span>{usd(Number(topSettlement.fuel_cost || 0))}</span>
                 </div>
@@ -182,7 +185,7 @@ export const Home: React.FC<HomeProps> = ({ setActiveTab }) => {
                 <div className="pt-4">
                   <div className="flex justify-between items-end">
                     <div className="flex flex-col">
-                      <span className="text-[8px] uppercase font-mono font-bold text-[#5B6168]">
+                      <span className="text-[11px] uppercase font-mono font-bold text-[#5B6168]">
                         Final Net Payment
                       </span>
                       <span className="text-3xl font-black font-mono text-[#0F5132]">

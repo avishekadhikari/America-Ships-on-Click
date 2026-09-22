@@ -18,12 +18,31 @@ async function startServer() {
   // fatal: serving requests without a schema just yields 500s on every route.
   const dbInfo = await initDb();
 
-  // Baseline response headers.
+  if (process.env.TRUST_PROXY === 'true') {
+    app.set('trust proxy', 1);
+  }
+
+  // Baseline response headers. In production, an HTTP hop behind the proxy
+  // is sent to HTTPS before any page or API response is written.
   app.use((req, res, next) => {
+    if (process.env.NODE_ENV === 'production') {
+      const host = req.headers.host || '';
+      const forwarded = req.headers['x-forwarded-proto'];
+      const proto = (Array.isArray(forwarded) ? forwarded[0] : forwarded || '').split(',')[0].trim();
+      const isLocal = host.startsWith('localhost') || host.startsWith('127.0.0.1');
+      if (!isLocal && proto === 'http') {
+        res.redirect(301, `https://${host}${req.originalUrl}`);
+        return;
+      }
+      if (!isLocal) {
+        res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
+      }
+    }
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     next();
   });
 

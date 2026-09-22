@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
+import { followTabLink, pathFor } from '../lib/routes';
 import { User } from '../types/api';
 
 interface NavbarProps {
@@ -45,21 +46,22 @@ export const Navbar: React.FC<NavbarProps> = ({
       {/* Top Navigation Bar */}
       <div className="bg-[#14171A] text-[#F0EAD8] px-6 py-3.5 flex items-center justify-between gap-4">
         {/* Brand Logo */}
-        <button
-          onClick={() => setActiveTab('home')}
-          className="flex items-center gap-3 text-left bg-transparent border-none cursor-pointer p-0 group"
+        <a
+          href="/"
+          onClick={(e) => followTabLink(e, setActiveTab, 'home')}
+          className="flex min-w-0 items-center gap-3 text-left group"
           aria-label="America Ships On Click — Home"
         >
-          <div className="w-9 h-9 bg-[#E3A008] text-[#14171A] font-black font-mono text-xl flex items-center justify-center border-2 border-[#F0EAD8] shadow-[2px_2px_0px_#F0EAD8] group-hover:translate-x-0.5 transition-transform">
+          <div className="w-9 h-9 shrink-0 bg-[#E3A008] text-[#14171A] font-black font-mono text-xl flex items-center justify-center border-2 border-[#F0EAD8] shadow-[2px_2px_0px_#F0EAD8] group-hover:translate-x-0.5 transition-transform" aria-hidden="true">
             A
           </div>
-          <span className="font-serif font-black text-xl tracking-tight uppercase leading-none text-[#F0EAD8]">
+          <span className="min-w-0 font-serif font-black text-base sm:text-xl tracking-tight uppercase leading-none text-[#F0EAD8]">
             America Ships On Click
-            <small className="block font-mono text-[#E3A008] text-[0.78rem] font-bold tracking-widest mt-1">
+            <small className="hidden sm:block font-mono text-[#E3A008] text-[0.78rem] font-bold tracking-widest mt-1">
               NO BROKERS · OPEN BOOKS LEDGER
             </small>
           </span>
-        </button>
+        </a>
 
         {/* Mobile Hamburger Toggle */}
         <button
@@ -82,23 +84,24 @@ export const Navbar: React.FC<NavbarProps> = ({
             const isActive = activeTab === item.id;
             const isAccent = 'accent' in item && item.accent;
             return (
-              <button
+              <a
                 key={item.id}
-                onClick={() => {
-                  setActiveTab(item.id);
+                href={pathFor(item.id)}
+                onClick={(e) => {
+                  followTabLink(e, setActiveTab, item.id);
                   setMobileMenuOpen(false);
                 }}
                 className={`
-                  text-left text-xs font-mono font-bold uppercase tracking-widest transition-all bg-transparent border-none cursor-pointer py-1.5 px-1
+                  text-left text-xs font-mono font-bold uppercase tracking-widest transition-all py-2.5 md:py-1.5 px-1
                   ${isActive
                     ? 'text-[#E3A008] underline underline-offset-8 decoration-2'
                     : isAccent
-                      ? 'text-[#E3A008]/90 hover:text-[#E3A008] hover:underline hover:underline-offset-4'
-                      : 'text-[#F0EAD8]/80 hover:text-[#F0EAD8] hover:underline hover:underline-offset-4'}
+                      ? 'text-[#E3A008] hover:underline hover:underline-offset-4'
+                      : 'text-[#C4BEB0] hover:text-[#F0EAD8] hover:underline hover:underline-offset-4'}
                 `}
               >
                 {item.label}
-              </button>
+              </a>
             );
           })}
 

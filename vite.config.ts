@@ -15,6 +15,9 @@ export default defineConfig(() => {
       outDir: path.resolve(__dirname, 'dist'),
       emptyOutDir: true,
     },
+    // Only VITE_ variables are visible to the browser bundle. Server secrets
+    // (JWT, database, payment token, Gemini) stay out of the client.
+    envPrefix: 'VITE_',
     resolve: {
       alias: {
         '@': path.resolve(__dirname, 'frontend/src'),

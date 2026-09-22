@@ -15,6 +15,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
   const [role, setRole] = useState<UserRole>('driver');
   const [name, setName] = useState('');
   const [companyName, setCompanyName] = useState('');
+  const [website, setWebsite] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,20 +33,38 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    const trimmedEmail = email.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      setError('Enter a valid email address.');
+      return;
+    }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
+
+    const displayName = (role === 'shipper' ? companyName : name).trim();
+    if (isSignup && displayName.length < 2) {
+      setError(role === 'shipper' ? 'Enter the company name.' : 'Enter your full name.');
+      return;
+    }
+
     setLoading(true);
 
     try {
       if (isSignup) {
         const res = await api.signup({
-          email,
+          email: trimmedEmail,
           password,
           role,
-          name: name || email.split('@')[0],
-          company_name: companyName
+          name: displayName,
+          company_name: role === 'shipper' ? displayName : companyName,
+          website
         });
         onSuccess(res.user);
       } else {
-        const res = await api.login(email, password);
+        const res = await api.login(trimmedEmail, password);
         onSuccess(res.user);
       }
       onClose();
@@ -57,6 +76,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
   };
 
   const handleDemoLogin = async (demoRole: UserRole) => {
+    if (!import.meta.env.DEV) return;
     setError(null);
     setLoading(true);
 
@@ -95,7 +115,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
           {isSignup ? 'Join America Ships On Click' : 'Welcome Back'}
         </h3>
 
-        {/* Quick Demo Login Preset Switcher */}
+        {import.meta.env.DEV && (
         <div className="bg-[#F0EAD8] p-3 rounded border border-[#E4DCC4] mb-4">
           <span className="text-xs font-mono font-bold text-[#0F5132] uppercase block mb-2">
             ⚡ Quick Demo Login (One Click):
@@ -124,9 +144,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
             </button>
           </div>
         </div>
+        )}
 
         {error && (
-          <div className="bg-[#8C2F1B]/10 border border-[#8C2F1B] text-[#8C2F1B] p-2.5 rounded text-xs font-mono mb-4">
+          <div role="alert" className="bg-[#8C2F1B]/10 border border-[#8C2F1B] text-[#8C2F1B] p-2.5 rounded text-xs font-mono mb-4">
             {error}
           </div>
         )}
@@ -156,6 +177,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
               <input
                 type="text"
                 required
+                minLength={2}
+                maxLength={80}
+                autoComplete={role === 'shipper' ? 'organization' : 'name'}
                 value={role === 'shipper' ? companyName : name}
                 onChange={(e) => role === 'shipper' ? setCompanyName(e.target.value) : setName(e.target.value)}
                 placeholder={role === 'shipper' ? 'Apex Logistics' : 'John Smith'}
@@ -171,6 +195,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
             <input
               type="email"
               required
+              autoComplete="email"
+              maxLength={254}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@company.com"
@@ -185,10 +211,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
             <input
               type="password"
               required
+              minLength={6}
+              autoComplete={isSignup ? 'new-password' : 'current-password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
+              placeholder="At least 6 characters"
               className="w-full p-2.5 bg-[#F0EAD8] border border-[#E4DCC4] rounded text-sm"
+            />
+          </div>
+
+          <div className="absolute -left-[9999px] h-0 w-0 overflow-hidden" aria-hidden="true">
+            <label htmlFor="signup-website">Website</label>
+            <input
+              id="signup-website"
+              name="website"
+              type="text"
+              tabIndex={-1}
+              autoComplete="off"
+              value={website}
+              onChange={(e) => setWebsite(e.target.value)}
             />
           </div>
 

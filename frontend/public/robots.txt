@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /api/
+Disallow: /uploads/
+
+Sitemap: https://www.americashipsonclick.com/sitemap.xml

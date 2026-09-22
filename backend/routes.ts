@@ -79,6 +79,30 @@ function scoped(req: AuthenticatedRequest, override?: Partial<SessionContext>) {
 const AUTH_CONTEXT: SessionContext = { role: 'auth' };
 const ENROLLMENT_CONTEXT: SessionContext = { role: 'enrollment' };
 
+const ANALYTICS_PATHS = new Set([
+  '/',
+  '/loads',
+  '/books',
+  '/drive',
+  '/post-load',
+  '/vvip',
+  '/privacy',
+  '/terms'
+]);
+
+async function hitRateLimit(bucket: string, limit: number, windowSecs: number) {
+  const limitRes = await db.as({ role: 'anon' }).query<{
+    allowed: boolean;
+    remaining: number;
+    retry_after: number;
+  }>('SELECT allowed, remaining, retry_after FROM app_rate_limit_hit($1, $2, $3)', [
+    bucket,
+    limit,
+    windowSecs
+  ]);
+  return limitRes.rows[0];
+}
+
 function sendError(res: Response, err: any): void {
   // A schema rejection means the client sent something wrong, so it must not be
   // reported as a server fault.
@@ -90,6 +114,25 @@ function sendError(res: Response, err: any): void {
 // -------------------------------------------------------------
 // 1. CONFIG ENDPOINT - Authoritative Single Source of Truth for Fees
 // -------------------------------------------------------------
+apiRouter.post('/analytics/page', async (req, res) => {
+  const parsed = z.object({ path: z.string().max(80) }).safeParse(req.body);
+  if (!parsed.success || !ANALYTICS_PATHS.has(parsed.data.path)) {
+    res.status(204).end();
+    return;
+  }
+  try {
+    const limit = await hitRateLimit(`analytics:${clientIp(req)}`, 30, 60);
+    if (limit && !limit.allowed) {
+      res.status(204).end();
+      return;
+    }
+    console.log(`[ANALYTICS] ${parsed.data.path}`);
+  } catch (err) {
+    console.error('[ANALYTICS] page count failed');
+  }
+  res.status(204).end();
+});
+
 apiRouter.get('/config', async (req, res) => {
   try {
     const rows = await db.as({ role: 'anon' }).query<{ key: string; value: string }>('SELECT key, value FROM platform_config');
@@ -322,19 +365,34 @@ apiRouter.post('/vvip/preregister', async (req, res) => {
 // direct write by an operator), and migration 0012 enforces the same rule at
 // the database so a future edit to this enum cannot quietly reopen it.
 const signupSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(6),
+  email: z.string().email('Enter a valid email address.'),
+  password: z.string().min(6, 'Password must be at least 6 characters.'),
   role: z.enum(['driver', 'shipper']),
   phone: z.string().optional(),
-  name: z.string().min(2),
+  name: z.string().min(2, 'Enter at least 2 characters.'),
   home_city: z.string().optional(),
   home_state: z.string().optional(),
-  company_name: z.string().optional()
+  company_name: z.string().optional(),
+  // Honeypot. Real browsers leave it empty; filled posts are rejected.
+  website: z.string().max(200).optional()
 });
 
 apiRouter.post('/auth/signup', async (req, res) => {
   try {
     const body = signupSchema.parse(req.body);
+    if (body.website && body.website.trim().length > 0) {
+      return res.status(400).json({ error: 'Could not create that account.' });
+    }
+
+    const ip = clientIp(req);
+    const limit = await hitRateLimit(`signup:${ip}`, 5, 3600);
+    if (limit && !limit.allowed) {
+      res.setHeader('Retry-After', String(limit.retry_after || 3600));
+      return res.status(429).json({
+        error: 'Too many signups from this network. Try again in an hour.',
+        retry_after_seconds: limit.retry_after
+      });
+    }
     const passwordHash = await bcrypt.hash(body.password, 10);
 
     // User row and its role profile are created together or not at all — a
@@ -402,6 +460,9 @@ apiRouter.post('/auth/signup', async (req, res) => {
       }
     });
   } catch (err: any) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: err.issues[0]?.message || 'Check the form and try again.' });
+    }
     // Validation failures and duplicate emails are client errors, not 500s.
     res.status(err instanceof HttpError ? err.status : 400).json({ error: err.message });
   }

@@ -12,8 +12,13 @@ import { PostLoad } from './pages/PostLoad';
 import { Dashboard } from './pages/Dashboard';
 import { Admin } from './pages/Admin';
 import { GoldenVvip } from './pages/GoldenVvip';
+import { NotFound } from './pages/NotFound';
+import { PrivacyPolicy, TermsOfUse } from './pages/Legal';
+import { CookieConsent } from './components/CookieConsent';
 
 import { api } from './lib/api';
+import { trackPage } from './lib/analytics';
+import { applyPageMeta, PAGE_META, pathFor, tabForPath } from './lib/routes';
 import { User } from './types/api';
 
 const queryClient = new QueryClient({
@@ -25,33 +30,6 @@ const queryClient = new QueryClient({
   },
 });
 
-/**
- * Tab-to-URL map. Each view has a real, linkable path so /admin (and the rest)
- * can be typed, bookmarked, and shared. Both the dev Vite middleware
- * (appType: 'spa') and the production catch-all in backend/server.ts serve
- * index.html for these paths, so a cold load lands on the right view.
- */
-const TAB_PATHS: Record<string, string> = {
-  home: '/',
-  loads: '/loads',
-  books: '/books',
-  driver: '/drive',
-  shipper: '/post-load',
-  dashboard: '/dashboard',
-  admin: '/admin',
-  vvip: '/vvip'
-};
-
-const PATH_TABS: Record<string, string> = Object.fromEntries(
-  Object.entries(TAB_PATHS).map(([tab, path]) => [path, tab])
-);
-
-/** Unknown paths fall back to home; trailing slashes are ignored. */
-function tabForPath(pathname: string): string {
-  const normalized = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
-  return PATH_TABS[normalized] ?? 'home';
-}
-
 export default function App() {
   const [activeTab, setActiveTabState] = useState(() => tabForPath(window.location.pathname));
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -61,22 +39,28 @@ export default function App() {
   // pasted link both work.
   const setActiveTab = useCallback((tab: string) => {
     setActiveTabState(tab);
-    const path = TAB_PATHS[tab] ?? '/';
+    const path = pathFor(tab);
     if (window.location.pathname !== path) {
       window.history.pushState({ tab }, '', path);
     }
   }, []);
 
-  // Rewrite the address bar to the canonical path on first load, so an
-  // unrecognized or trailing-slash URL does not sit over the home view.
+  // Strip a trailing slash on a known path. Unknown paths stay put so the
+  // 404 view matches the address the visitor actually opened.
   useEffect(() => {
-    const canonical = TAB_PATHS[tabForPath(window.location.pathname)];
+    const tab = tabForPath(window.location.pathname);
+    const canonical = tab === 'notfound' ? null : pathFor(tab);
     if (canonical && window.location.pathname !== canonical) {
-      window.history.replaceState({ tab: activeTab }, '', canonical + window.location.search);
+      window.history.replaceState({ tab }, '', canonical + window.location.search);
     }
-    // Intentionally mount-only: this normalizes the entry URL, nothing later.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    applyPageMeta(activeTab);
+    if (activeTab === 'notfound') return;
+    const path = PAGE_META[activeTab]?.path;
+    if (path) trackPage(path);
+  }, [activeTab]);
 
   // Browser Back/Forward moves between views.
   useEffect(() => {
@@ -173,6 +157,9 @@ export default function App() {
               }}
             />
           )}
+          {activeTab === 'privacy' && <PrivacyPolicy />}
+          {activeTab === 'terms' && <TermsOfUse />}
+          {activeTab === 'notfound' && <NotFound setActiveTab={setActiveTab} />}
         </main>
 
         {/* Footer */}
@@ -186,6 +173,15 @@ export default function App() {
         />
       </div>
       )}
+      <CookieConsent
+        onNavigate={setActiveTab}
+        onChoose={(value) => {
+          if (value === 'analytics') {
+            const path = PAGE_META[activeTab]?.path;
+            if (path) trackPage(path);
+          }
+        }}
+      />
     </QueryClientProvider>
   );
 }

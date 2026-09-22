@@ -1,4 +1,5 @@
 import React from 'react';
+import { followTabLink } from '../lib/routes';
 
 interface FooterProps {
   setActiveTab: (tab: string) => void;
@@ -23,10 +24,10 @@ export const Footer: React.FC<FooterProps> = ({ setActiveTab, feePct = 0.05 }) =
               Platform Navigation
             </h4>
             <ul className="list-none p-0 m-0 space-y-2 font-mono text-xs">
-              <li><button onClick={() => setActiveTab('loads')} className="bg-transparent border-none p-0 text-[#F0EAD8]/80 hover:text-[#E3A008] hover:underline cursor-pointer">Find Loads</button></li>
-              <li><button onClick={() => setActiveTab('vvip')} className="bg-transparent border-none p-0 text-[#E3A008]/90 hover:text-[#E3A008] hover:underline cursor-pointer">Golden VVIP</button></li>
-              <li><button onClick={() => setActiveTab('books')} className="bg-transparent border-none p-0 text-[#F0EAD8]/80 hover:text-[#E3A008] hover:underline cursor-pointer">Open Books Ledger</button></li>
-              <li><button onClick={() => setActiveTab('dashboard')} className="bg-transparent border-none p-0 text-[#F0EAD8]/80 hover:text-[#E3A008] hover:underline cursor-pointer">Dashboard</button></li>
+              <li><a href="/loads" onClick={(e) => followTabLink(e, setActiveTab, 'loads')} className="text-[#C4BEB0] hover:text-[#E3A008] hover:underline">Find Loads</a></li>
+              <li><a href="/vvip" onClick={(e) => followTabLink(e, setActiveTab, 'vvip')} className="text-[#E3A008] hover:underline">Golden VVIP</a></li>
+              <li><a href="/books" onClick={(e) => followTabLink(e, setActiveTab, 'books')} className="text-[#C4BEB0] hover:text-[#E3A008] hover:underline">Open Books Ledger</a></li>
+              <li><a href="/dashboard" onClick={(e) => followTabLink(e, setActiveTab, 'dashboard')} className="text-[#C4BEB0] hover:text-[#E3A008] hover:underline">Dashboard</a></li>
             </ul>
           </div>
           <div>
@@ -34,8 +35,10 @@ export const Footer: React.FC<FooterProps> = ({ setActiveTab, feePct = 0.05 }) =
               Get Started
             </h4>
             <ul className="list-none p-0 m-0 space-y-2 font-mono text-xs">
-              <li><button onClick={() => setActiveTab('driver')} className="bg-transparent border-none p-0 text-[#F0EAD8]/80 hover:text-[#E3A008] hover:underline cursor-pointer">Drive With Us</button></li>
-              <li><button onClick={() => setActiveTab('shipper')} className="bg-transparent border-none p-0 text-[#F0EAD8]/80 hover:text-[#E3A008] hover:underline cursor-pointer">Post a Load</button></li>
+              <li><a href="/drive" onClick={(e) => followTabLink(e, setActiveTab, 'driver')} className="text-[#C4BEB0] hover:text-[#E3A008] hover:underline">Drive With Us</a></li>
+              <li><a href="/post-load" onClick={(e) => followTabLink(e, setActiveTab, 'shipper')} className="text-[#C4BEB0] hover:text-[#E3A008] hover:underline">Post a Load</a></li>
+              <li><a href="/privacy" onClick={(e) => followTabLink(e, setActiveTab, 'privacy')} className="text-[#C4BEB0] hover:text-[#E3A008] hover:underline">Privacy Policy</a></li>
+              <li><a href="/terms" onClick={(e) => followTabLink(e, setActiveTab, 'terms')} className="text-[#C4BEB0] hover:text-[#E3A008] hover:underline">Terms of Use</a></li>
             </ul>
           </div>
           <div>
@@ -50,7 +53,7 @@ export const Footer: React.FC<FooterProps> = ({ setActiveTab, feePct = 0.05 }) =
           </div>
         </div>
         <div className="border-t border-[#F0EAD8]/20 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 font-mono text-[0.78rem] text-[#F0EAD8]/60">
-          <div>
+          <div className="text-[#C4BEB0]">
             FULL-STACK API RUNTIME · REAL-TIME OPEN BOOKS LEDGER. Live PostgreSQL data &amp; SSE events.
           </div>
           <div className="stamp border-[#E3A008] text-[#E3A008]">
