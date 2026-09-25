@@ -1,8 +1,16 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { User } from '../types/api';
 import { Dashboard } from './Dashboard';
 import { RateCardsAdmin } from './RateCardsAdmin';
 import { AdminDirectory } from './AdminDirectory';
+
+type AdminView = 'shippers' | 'ledger' | 'drivers';
+
+const VIEWS: { id: AdminView; label: string }[] = [
+  { id: 'shippers', label: 'Shipper' },
+  { id: 'ledger', label: 'Ledger' },
+  { id: 'drivers', label: 'Driver' }
+];
 
 interface AdminProps {
   currentUser: User | null;
@@ -19,6 +27,7 @@ interface AdminProps {
  * non-admin who edits their way past this component still gets 403s.
  */
 export const Admin: React.FC<AdminProps> = ({ currentUser, onOpenAuth, onSwitchRole }) => {
+  const [view, setView] = useState<AdminView>('ledger');
   if (!currentUser) {
     return (
       <div className="py-16">
@@ -65,12 +74,41 @@ export const Admin: React.FC<AdminProps> = ({ currentUser, onOpenAuth, onSwitchR
   }
 
   return (
-    <>
-      <Dashboard currentUser={currentUser} onOpenAuth={onOpenAuth} onSwitchRole={onSwitchRole} />
-      <div className="max-w-295 mx-auto px-6 pb-16">
-        <AdminDirectory />
-        <RateCardsAdmin />
+    <div className="pt-8">
+      <div className="max-w-295 mx-auto px-6">
+        <div className="flex flex-wrap gap-2" role="tablist" aria-label="Admin sections">
+          {VIEWS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              aria-selected={view === item.id}
+              onClick={() => setView(item.id)}
+              className={view === item.id ? 'btn amber text-xs py-2 px-5' : 'btn ghost text-xs py-2 px-5'}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
       </div>
-    </>
+
+      {view === 'ledger' ? (
+        <>
+          <Dashboard currentUser={currentUser} onOpenAuth={onOpenAuth} onSwitchRole={onSwitchRole} />
+          <div className="max-w-295 mx-auto px-6 pb-16">
+            <RateCardsAdmin />
+          </div>
+        </>
+      ) : (
+        <div className="max-w-295 mx-auto px-6 pb-16">
+          <div className="flex justify-end py-4">
+            <button onClick={onSwitchRole} className="btn amber py-2 text-xs">
+              Switch Role
+            </button>
+          </div>
+          <AdminDirectory key={view} mode={view} />
+        </div>
+      )}
+    </div>
   );
 };

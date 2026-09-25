@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { AdminDriver, AdminShipper } from '../types/api';
 
-type Tab = 'drivers' | 'shippers';
+type DirectoryMode = 'drivers' | 'shippers';
 
 function label(value: string): string {
   return value.replace(/_/g, ' ');
@@ -21,8 +21,7 @@ function statusClass(status: string): string {
   return 'text-[#5B3D00]';
 }
 
-export const AdminDirectory: React.FC = () => {
-  const [tab, setTab] = useState<Tab>('drivers');
+export const AdminDirectory: React.FC<{ mode: DirectoryMode }> = ({ mode }) => {
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -59,15 +58,18 @@ export const AdminDirectory: React.FC = () => {
   const selectedDriver = drivers.find((driver) => driver.id === selectedId) ?? null;
   const selectedShipper = shippers.find((shipper) => shipper.id === selectedId) ?? null;
 
+  const heading = mode === 'drivers' ? 'Drivers' : 'Shippers';
+  const blurb = mode === 'drivers'
+    ? 'Open a driver to see the CDL, equipment, documents, and payout status.'
+    : 'Open a shipper to see the company profile and recent loads.';
+
   return (
-    <section className="mt-12 space-y-4">
+    <section className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <span className="eyebrow block mb-1">Accounts</span>
-          <h3 className="text-xl font-display-title">Shippers &amp; drivers</h3>
-          <p className="text-sm text-[#5B6168] mt-1">
-            Open a row to see the profile, documents, equipment, and recent activity.
-          </p>
+          <h3 className="text-xl font-display-title">{heading}</h3>
+          <p className="text-sm text-[#5B6168] mt-1">{blurb}</p>
         </div>
         <input
           value={query}
@@ -75,26 +77,9 @@ export const AdminDirectory: React.FC = () => {
             setQuery(e.target.value);
             setSelectedId(null);
           }}
-          placeholder={tab === 'drivers' ? 'Search name, email, CDL, DOT, MC' : 'Search company or email'}
+          placeholder={mode === 'drivers' ? 'Search name, email, CDL, DOT, MC' : 'Search company or email'}
           className="p-2 bg-[#FAFAF7] border border-[#E4DCC4] font-mono text-xs w-full sm:w-72"
         />
-      </div>
-
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => { setTab('drivers'); setSelectedId(null); }}
-          className={tab === 'drivers' ? 'btn amber text-xs py-2' : 'btn ghost text-xs py-2'}
-        >
-          Drivers ({data?.drivers.length ?? 0})
-        </button>
-        <button
-          type="button"
-          onClick={() => { setTab('shippers'); setSelectedId(null); }}
-          className={tab === 'shippers' ? 'btn amber text-xs py-2' : 'btn ghost text-xs py-2'}
-        >
-          Shippers ({data?.shippers.length ?? 0})
-        </button>
       </div>
 
       {error && (
@@ -103,7 +88,7 @@ export const AdminDirectory: React.FC = () => {
         </div>
       )}
 
-      {tab === 'drivers' ? (
+      {mode === 'drivers' ? (
         <DriverTable
           rows={drivers}
           loading={isLoading}
@@ -119,8 +104,8 @@ export const AdminDirectory: React.FC = () => {
         />
       )}
 
-      {selectedDriver && <DriverDetail driver={selectedDriver} />}
-      {selectedShipper && <ShipperDetail shipper={selectedShipper} />}
+      {mode === 'drivers' && selectedDriver && <DriverDetail driver={selectedDriver} />}
+      {mode === 'shippers' && selectedShipper && <ShipperDetail shipper={selectedShipper} />}
     </section>
   );
 };
