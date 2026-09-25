@@ -13,7 +13,9 @@ import {
   RateCatalog,
   QuoteBreakdown,
   RateCard,
-  RateQuoteLog
+  RateQuoteLog,
+  AdminDriver,
+  AdminShipper
 } from '../types/api';
 
 const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || '/api';
@@ -285,6 +287,13 @@ export const api = {
   },
 
   // Admin
+  async getAdminDirectory(): Promise<{ drivers: AdminDriver[]; shippers: AdminShipper[] }> {
+    const res = await fetch(`${API_BASE}/admin/directory`, {
+      headers: getAuthHeaders()
+    });
+    return handleResponse<{ drivers: AdminDriver[]; shippers: AdminShipper[] }>(res);
+  },
+
   async getAdminLedger(): Promise<any[]> {
     const res = await fetch(`${API_BASE}/admin/ledger`, {
       headers: getAuthHeaders()

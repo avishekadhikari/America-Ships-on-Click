@@ -2,6 +2,7 @@ import React from 'react';
 import { User } from '../types/api';
 import { Dashboard } from './Dashboard';
 import { RateCardsAdmin } from './RateCardsAdmin';
+import { AdminDirectory } from './AdminDirectory';
 
 interface AdminProps {
   currentUser: User | null;
@@ -67,6 +68,7 @@ export const Admin: React.FC<AdminProps> = ({ currentUser, onOpenAuth, onSwitchR
     <>
       <Dashboard currentUser={currentUser} onOpenAuth={onOpenAuth} onSwitchRole={onSwitchRole} />
       <div className="max-w-295 mx-auto px-6 pb-16">
+        <AdminDirectory />
         <RateCardsAdmin />
       </div>
     </>

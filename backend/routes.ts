@@ -1378,6 +1378,121 @@ apiRouter.get('/admin/quotes', authenticate, requireRole('admin'), async (req: A
   }
 });
 
+apiRouter.get('/admin/directory', authenticate, requireRole('admin'), async (req: AuthenticatedRequest, res) => {
+  try {
+    const dbx = scoped(req);
+    const [drivers, shippers] = await Promise.all([
+      dbx.query(`
+        SELECT
+          d.id,
+          d.full_name,
+          d.home_base_city,
+          d.home_base_state,
+          d.cdl_number,
+          d.cdl_class,
+          d.dot_number,
+          d.mc_number,
+          d.verification_status,
+          d.verified_at,
+          d.rejection_reason,
+          d.insurance_expires_at,
+          d.created_at,
+          u.email,
+          u.phone,
+          COALESCE(pay.same_day_funding_opt_in, false) AS same_day_funding_opt_in,
+          (pay.id IS NOT NULL) AS payout_on_file,
+          COALESCE((
+            SELECT json_agg(json_build_object(
+              'equipment_type', e.equipment_type,
+              'trailer_length_ft', e.trailer_length_ft
+            ))
+            FROM driver_equipment e
+            WHERE e.driver_id = d.id
+          ), '[]'::json) AS equipment,
+          COALESCE((
+            SELECT json_agg(json_build_object(
+              'id', doc.id,
+              'doc_type', doc.doc_type,
+              'file_url', doc.file_url,
+              'uploaded_at', doc.uploaded_at,
+              'review_status', COALESCE(doc.review_status::text, CASE WHEN doc.verified THEN 'verified' ELSE 'pending' END)
+            ) ORDER BY doc.uploaded_at DESC)
+            FROM driver_documents doc
+            WHERE doc.driver_id = d.id
+          ), '[]'::json) AS documents,
+          (SELECT COUNT(*)::int FROM bookings b WHERE b.driver_id = d.id) AS booking_count,
+          (SELECT COUNT(*)::int FROM bookings b WHERE b.driver_id = d.id AND b.status = 'active') AS active_booking_count
+        FROM driver_profiles d
+        JOIN users u ON u.id = d.user_id
+        LEFT JOIN driver_payment_accounts pay ON pay.driver_id = d.id
+        ORDER BY d.created_at DESC
+      `),
+      dbx.query(`
+        SELECT
+          sp.id,
+          sp.company_name,
+          sp.billing_email,
+          sp.created_at,
+          u.email,
+          u.phone,
+          (SELECT COUNT(*)::int FROM loads l WHERE l.shipper_id = sp.id) AS load_count,
+          (SELECT COUNT(*)::int FROM loads l WHERE l.shipper_id = sp.id AND l.status = 'open') AS open_load_count,
+          COALESCE((
+            SELECT json_agg(json_build_object(
+              'id', recent.id,
+              'origin_city', recent.origin_city,
+              'origin_state', recent.origin_state,
+              'dest_city', recent.dest_city,
+              'dest_state', recent.dest_state,
+              'miles', recent.miles,
+              'rate_per_mile', recent.rate_per_mile,
+              'equipment_type', recent.equipment_type,
+              'status', recent.status,
+              'pickup_date', recent.pickup_date
+            ) ORDER BY recent.created_at DESC)
+            FROM (
+              SELECT *
+              FROM loads
+              WHERE shipper_id = sp.id
+              ORDER BY created_at DESC
+              LIMIT 8
+            ) recent
+          ), '[]'::json) AS recent_loads
+        FROM shipper_profiles sp
+        JOIN users u ON u.id = sp.user_id
+        ORDER BY sp.created_at DESC
+      `)
+    ]);
+    const asList = (value: unknown) => {
+      if (Array.isArray(value)) return value;
+      if (typeof value === 'string') {
+        try {
+          const parsed = JSON.parse(value);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [];
+        }
+      }
+      return [];
+    };
+    res.json({
+      drivers: drivers.rows.map((row: any) => ({
+        ...row,
+        equipment: asList(row.equipment),
+        documents: asList(row.documents),
+        payout_on_file: Boolean(row.payout_on_file),
+        same_day_funding_opt_in: Boolean(row.same_day_funding_opt_in)
+      })),
+      shippers: shippers.rows.map((row: any) => ({
+        ...row,
+        recent_loads: asList(row.recent_loads)
+      }))
+    });
+  } catch (err: any) {
+    sendError(res, err);
+  }
+});
+
 apiRouter.get('/admin/vvip-leads', authenticate, requireRole('admin'), async (req: AuthenticatedRequest, res) => {
   try {
     const rows = await scoped(req).query(

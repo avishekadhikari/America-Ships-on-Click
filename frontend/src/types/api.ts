@@ -222,6 +222,68 @@ export interface SettlementTotals {
   net: number;
 }
 
+export interface AdminDriverDocument {
+  id: string;
+  doc_type: string;
+  file_url: string;
+  uploaded_at: string;
+  review_status: string;
+}
+
+export interface AdminDriverEquipment {
+  equipment_type: EquipmentType;
+  trailer_length_ft: number;
+}
+
+export interface AdminDriver {
+  id: string;
+  full_name: string;
+  email: string;
+  phone?: string | null;
+  home_base_city: string;
+  home_base_state: string;
+  cdl_number?: string | null;
+  cdl_class?: string | null;
+  dot_number?: string | null;
+  mc_number?: string | null;
+  verification_status: 'pending' | 'verified' | 'rejected';
+  verified_at?: string | null;
+  rejection_reason?: string | null;
+  insurance_expires_at?: string | null;
+  created_at: string;
+  same_day_funding_opt_in: boolean;
+  payout_on_file: boolean;
+  equipment: AdminDriverEquipment[];
+  documents: AdminDriverDocument[];
+  booking_count: number;
+  active_booking_count: number;
+}
+
+export interface AdminShipperLoad {
+  id: string;
+  origin_city: string;
+  origin_state: string;
+  dest_city: string;
+  dest_state: string;
+  miles: number;
+  rate_per_mile: number;
+  equipment_type: EquipmentType;
+  status: LoadStatus;
+  pickup_date: string;
+}
+
+export interface AdminShipper {
+  id: string;
+  company_name: string;
+  billing_email: string;
+  email: string;
+  phone?: string | null;
+  created_at: string;
+  load_count: number;
+  open_load_count: number;
+  recent_loads: AdminShipperLoad[];
+}
+
 export interface DriverOnboardInput {
   full_name: string;
   home_base_city: string;
