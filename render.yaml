@@ -1,7 +1,7 @@
 # Render Blueprint — America Ships On Click
 #
 # The app is an Express server (dist/server.cjs) that also serves the built
-# SPA, so deep links like /vvip and the /api routes come from one process.
+# SPA, so deep links like /loads and the /api routes come from one process.
 # Static hosting cannot run it.
 #
 # Two database roles, matching database/scripts/postgres-dev.sh:
@@ -47,8 +47,8 @@ services:
       - key: DATABASE_URL
         sync: false
 
-      # Behind Render's load balancer. Without this the rate limiter and the
-      # vvip_leads.ip_address column record the proxy's address, not the client's.
+      # Behind Render's load balancer. Without this the rate limiter records
+      # the proxy's address, not the client's.
       - key: TRUST_PROXY
         value: "true"
 

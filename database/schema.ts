@@ -25,7 +25,6 @@ export type LoadEventType =
 export type OfferStatus = 'pending' | 'accepted' | 'declined' | 'withdrawn' | 'expired';
 export type DisputeStatus = 'open' | 'under_review' | 'resolved' | 'rejected';
 export type DisputeCategory = 'rate' | 'miles' | 'fuel' | 'detention' | 'damage' | 'fee' | 'other';
-export type VvipRole = 'shipper' | 'carrier' | 'fleet' | 'other';
 export type MembershipStatus = 'active' | 'canceled' | 'expired';
 export type EpochStatus = 'open' | 'closed';
 export type ReserveSource = 'settlement' | 'on_chain' | 'manual';
@@ -206,16 +205,6 @@ export interface PlatformConfig {
   premium_weight?: number;
   sell_lock_days?: number;
   base_chain_id?: number;
-}
-
-export interface VvipLead {
-  id: string;
-  name: string;
-  email: string;
-  who_you_are: VvipRole;
-  location: string;
-  ip_address?: string;
-  created_at: string;
 }
 
 export interface LoadEvent {

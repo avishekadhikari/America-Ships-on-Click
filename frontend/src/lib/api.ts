@@ -9,7 +9,6 @@ import {
   SettlementTotals,
   DriverOnboardInput,
   User,
-  VvipRole,
   RateCatalog,
   QuoteBreakdown,
   RateCard,
@@ -325,20 +324,5 @@ export const api = {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-  },
-
-  async preregisterVvip(data: {
-    name: string;
-    email: string;
-    who_you_are: VvipRole;
-    location: string;
-    website?: string;
-  }): Promise<{ ok: true; already_on_list?: boolean }> {
-    const res = await fetch(`${API_BASE}/vvip/preregister`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
-    return handleResponse<{ ok: true; already_on_list?: boolean }>(res);
   }
 };

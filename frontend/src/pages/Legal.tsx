@@ -1,6 +1,6 @@
 import React from 'react';
 
-const UPDATED = 'September 22, 2026';
+const UPDATED = 'September 27, 2026';
 
 function Section({ heading, children }: { heading: string; children: React.ReactNode }) {
   return (
@@ -48,12 +48,6 @@ export const PrivacyPolicy: React.FC = () => (
       <p>
         The load board and the settlement ledger are public. A settled load can show the lane, miles, rate, platform fee,
         and carrier net. Shipper billing email and carrier payment details are not part of that public view.
-      </p>
-    </Section>
-    <Section heading="Golden VVIP">
-      <p>
-        The interest form stores a name, email, role, location, and the network address used to rate-limit the form.
-        If the operator has connected a notification webhook, that same lead is forwarded there. The form does not create an account.
       </p>
     </Section>
     <Section heading="Sign-in and this browser">

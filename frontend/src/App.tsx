@@ -11,7 +11,6 @@ import { DriveWithUs } from './pages/DriveWithUs';
 import { PostLoad } from './pages/PostLoad';
 import { Dashboard } from './pages/Dashboard';
 import { Admin } from './pages/Admin';
-import { GoldenVvip } from './pages/GoldenVvip';
 import { NotFound } from './pages/NotFound';
 import { PrivacyPolicy, TermsOfUse } from './pages/Legal';
 import { CookieConsent } from './components/CookieConsent';
@@ -96,9 +95,6 @@ export default function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {activeTab === 'vvip' ? (
-        <GoldenVvip />
-      ) : (
       <div className="min-h-screen flex flex-col bg-[#F0EAD8] text-[#22262A] font-sans antialiased">
         {/* Navigation Bar */}
         <Navbar
@@ -172,7 +168,6 @@ export default function App() {
           onSuccess={(user) => setCurrentUser(user)}
         />
       </div>
-      )}
       <CookieConsent
         onNavigate={setActiveTab}
         onChoose={(value) => {

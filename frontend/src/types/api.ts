@@ -15,7 +15,6 @@ export type EquipmentType =
   | 'power_only';
 export type LoadStatus = 'open' | 'booked' | 'in_transit' | 'delivered' | 'cancelled';
 export type BookingStatus = 'active' | 'completed' | 'cancelled';
-export type VvipRole = 'shipper' | 'carrier' | 'fleet' | 'other';
 
 export interface PlatformConfig {
   fee_pct: number;
