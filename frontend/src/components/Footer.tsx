@@ -25,7 +25,6 @@ export const Footer: React.FC<FooterProps> = ({ setActiveTab, feePct = 0.05 }) =
             </h4>
             <ul className="list-none p-0 m-0 space-y-2 font-mono text-xs">
               <li><a href="/loads" onClick={(e) => followTabLink(e, setActiveTab, 'loads')} className="text-[#C4BEB0] hover:text-[#E3A008] hover:underline">Find Loads</a></li>
-              <li><a href="/vvip" onClick={(e) => followTabLink(e, setActiveTab, 'vvip')} className="text-[#E3A008] hover:underline">Golden VVIP</a></li>
               <li><a href="/books" onClick={(e) => followTabLink(e, setActiveTab, 'books')} className="text-[#C4BEB0] hover:text-[#E3A008] hover:underline">Open Books Ledger</a></li>
               <li><a href="/dashboard" onClick={(e) => followTabLink(e, setActiveTab, 'dashboard')} className="text-[#C4BEB0] hover:text-[#E3A008] hover:underline">Dashboard</a></li>
             </ul>

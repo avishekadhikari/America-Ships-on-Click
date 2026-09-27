@@ -8,7 +8,6 @@ const TRACKED_PATHS = new Set([
   '/books',
   '/drive',
   '/post-load',
-  '/vvip',
   '/privacy',
   '/terms'
 ]);

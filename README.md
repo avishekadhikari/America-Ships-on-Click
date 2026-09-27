@@ -378,7 +378,7 @@ JWT_SECRET="americashipsonclick_secret_jwt_key_2026"
 - Freight: `loads`, `bookings`, `load_events`, `load_offers`, `settlements`, `settlement_disputes`, `settlement_adjustments`, `platform_config`
 - Phase 1 token: `wallets`, `chain_contracts`, `webhook_receipts`, `contract_events`, `token_buys`, `token_positions`, `app_memberships`, `premium_attestations`, `hourly_epochs`, `transaction_reserves`, `hourly_claims`, `driver_payouts`
 - Phase 2 (empty): `haul_receipts`
-- Ops: `vvip_leads`, `ratings`, `notifications`, `audit_log`, `refresh_tokens`, `schema_migrations`
+- Ops: `ratings`, `notifications`, `audit_log`, `refresh_tokens`, `schema_migrations`
 
 ### Database Views:
 - `public_ledger_view`: Joins settlements to loads while preserving driver/shipper anonymity.

@@ -1,7 +1,7 @@
 # Deploying to a Node host
 
 `www.americashipsonclick.com` currently serves a **static** build on Vercel.
-That is why `/vvip`, `/loads` and `/dashboard` return 404 and every `/api`
+That is why `/loads` and `/dashboard` return 404 and every `/api`
 route is missing: this app is an Express server, not a static site. `npm run
 build` produces `dist/server.cjs`, which serves the API *and* the SPA (with a
 `GET *` fallback, so deep links resolve). Something has to run that process.
@@ -104,7 +104,7 @@ Against the `onrender.com` URL:
 
 ```bash
 curl -s https://<service>.onrender.com/api/health
-curl -s -o /dev/null -w '%{http_code}\n' https://<service>.onrender.com/vvip   # expect 200
+curl -s -o /dev/null -w '%{http_code}\n' https://<service>.onrender.com/loads  # expect 200
 ```
 
 Confirm RLS is actually in force — this should return **zero rows**, because
@@ -136,7 +136,7 @@ domain at once. Render issues the TLS certificate once the records resolve.
 After cutover:
 
 ```bash
-curl -s -o /dev/null -w '%{http_code}\n' https://www.americashipsonclick.com/vvip
+curl -s -o /dev/null -w '%{http_code}\n' https://www.americashipsonclick.com/loads
 curl -s https://www.americashipsonclick.com/api/config
 ```
 

@@ -9,7 +9,6 @@ export const TAB_PATHS: Record<string, string> = {
   shipper: '/post-load',
   dashboard: '/dashboard',
   admin: '/admin',
-  vvip: '/vvip',
   privacy: '/privacy',
   terms: '/terms'
 };
@@ -79,12 +78,6 @@ export const PAGE_META: Record<string, { title: string; description: string; pat
     description: 'Operator console for America Ships On Click.',
     path: '/admin',
     robots: 'noindex,nofollow'
-  },
-  vvip: {
-    title: 'Golden VVIP — America Ships On Click',
-    description: 'Join the Golden VVIP interest list before the public window. No account is created.',
-    path: '/vvip',
-    robots: 'index,follow'
   },
   privacy: {
     title: 'Privacy Policy — America Ships On Click',

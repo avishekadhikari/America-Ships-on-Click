@@ -31,7 +31,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   const navItems = [
     { id: 'home', label: 'Home' },
     { id: 'loads', label: 'Find Loads' },
-    { id: 'vvip', label: 'Golden VVIP', accent: true },
     { id: 'books', label: 'Open Books' },
     { id: 'driver', label: 'Drive With Us' },
     { id: 'shipper', label: 'Post Load' },
@@ -82,7 +81,6 @@ export const Navbar: React.FC<NavbarProps> = ({
         `}>
           {navItems.map((item) => {
             const isActive = activeTab === item.id;
-            const isAccent = 'accent' in item && item.accent;
             return (
               <a
                 key={item.id}
@@ -95,9 +93,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   text-left text-xs font-mono font-bold uppercase tracking-widest transition-all py-2.5 md:py-1.5 px-1
                   ${isActive
                     ? 'text-[#E3A008] underline underline-offset-8 decoration-2'
-                    : isAccent
-                      ? 'text-[#E3A008] hover:underline hover:underline-offset-4'
-                      : 'text-[#C4BEB0] hover:text-[#F0EAD8] hover:underline hover:underline-offset-4'}
+                    : 'text-[#C4BEB0] hover:text-[#F0EAD8] hover:underline hover:underline-offset-4'}
                 `}
               >
                 {item.label}
