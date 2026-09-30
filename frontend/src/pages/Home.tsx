@@ -53,7 +53,13 @@ export const Home: React.FC<HomeProps> = ({ setActiveTab }) => {
 
   return (
     <div className="bg-[#F0EAD8] text-[#14171A]">
-      <section className="grid grid-cols-1 lg:grid-cols-12 border-b-2 border-[#14171A]">
+      <section className="grid grid-cols-1 lg:grid-cols-12 border-b-2 border-[#14171A] relative overflow-hidden isolate">
+        <img
+          src="/hero-truck.jpg"
+          alt=""
+          aria-hidden="true"
+          className="pointer-events-none select-none absolute -z-10 -right-[20%] top-[18%] w-[150%] lg:-right-[4%] lg:top-auto lg:bottom-[6%] lg:w-[88%] max-w-none opacity-30 lg:opacity-55 [mask-image:radial-gradient(ellipse_at_center,black_50%,transparent_75%)]"
+        />
         <div className="lg:col-span-7 p-8 sm:p-12 flex flex-col justify-between border-b-2 lg:border-b-0 lg:border-r-2 border-[#14171A]">
           <div>
             <h1 className="text-5xl sm:text-6xl xl:text-7xl font-serif font-black uppercase leading-[0.85] tracking-tighter mb-6 text-[#14171A]">
@@ -124,7 +130,7 @@ export const Home: React.FC<HomeProps> = ({ setActiveTab }) => {
           </div>
         </div>
 
-        <div className="lg:col-span-5 p-8 sm:p-12 bg-[#E8E2CF] flex flex-col items-center justify-center relative overflow-hidden">
+        <div className="lg:col-span-5 p-8 sm:p-12 bg-[#E8E2CF]/50 flex flex-col items-center justify-center relative overflow-hidden">
           <div
             className="absolute inset-0 opacity-10 pointer-events-none mix-blend-multiply"
             style={{
