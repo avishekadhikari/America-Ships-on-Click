@@ -58,7 +58,7 @@ export const Home: React.FC<HomeProps> = ({ setActiveTab }) => {
           src="/hero-truck.jpg"
           alt=""
           aria-hidden="true"
-          className="pointer-events-none select-none absolute -z-10 -right-[20%] top-[18%] w-[150%] lg:right-[10%] lg:top-auto lg:bottom-[6%] lg:w-[80%] max-w-none opacity-30 lg:opacity-55 [mask-image:radial-gradient(ellipse_at_center,black_62%,transparent_82%)]"
+          className="pointer-events-none select-none absolute -z-10 -right-[20%] top-[18%] w-[150%] lg:right-auto lg:-left-[4%] lg:top-auto lg:bottom-[6%] lg:w-[80%] max-w-none opacity-30 lg:opacity-55 [mask-image:radial-gradient(ellipse_at_center,black_62%,transparent_82%)]"
         />
         <div className="lg:col-span-7 p-8 sm:p-12 flex flex-col justify-between border-b-2 lg:border-b-0 lg:border-r-2 border-[#14171A]">
           <div>
