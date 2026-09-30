@@ -220,7 +220,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
             />
           </div>
 
-          <div className="absolute -left-[9999px] h-0 w-0 overflow-hidden" aria-hidden="true">
+          <div className="absolute left-[-9999px] h-0 w-0 overflow-hidden" aria-hidden="true">
             <label htmlFor="signup-website">Website</label>
             <input
               id="signup-website"
