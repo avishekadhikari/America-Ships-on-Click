@@ -1281,6 +1281,35 @@ apiRouter.get('/admin/quotes', authenticate, requireRole('admin'), async (req: A
   }
 });
 
+// -------------------------------------------------------------
+// ADMIN DRIVER VERIFICATION
+// -------------------------------------------------------------
+apiRouter.patch('/admin/drivers/:id/verify', authenticate, requireRole('admin'), async (req: AuthenticatedRequest, res) => {
+  try {
+    const driverId = req.params.id;
+    const { status, rejection_reason } = req.body;
+    if (!['verified', 'rejected', 'pending'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status' });
+    }
+    const dbx = scoped(req);
+    const result = await dbx.query(`
+      UPDATE driver_profiles
+      SET verification_status = $1,
+          verified_at = CASE WHEN $1 = 'verified' THEN CURRENT_TIMESTAMP ELSE NULL END,
+          rejection_reason = $2
+      WHERE id = $3
+      RETURNING id, full_name, verification_status, verified_at, rejection_reason
+    `, [status, rejection_reason || null, driverId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Driver not found' });
+    }
+    res.json({ success: true, driver: result.rows[0] });
+  } catch (err: any) {
+    sendError(res, err);
+  }
+});
+
 apiRouter.get('/admin/directory', authenticate, requireRole('admin'), async (req: AuthenticatedRequest, res) => {
   try {
     const dbx = scoped(req);
