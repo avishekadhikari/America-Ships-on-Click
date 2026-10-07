@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { AdminDriver, AdminShipper } from '../types/api';
 
@@ -217,6 +217,16 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 function DriverDetail({ driver }: { driver: AdminDriver }) {
+  const queryClient = useQueryClient();
+  const [reason, setReason] = useState('');
+  const decide = useMutation({
+    mutationFn: (status: 'verified' | 'rejected' | 'pending') =>
+      api.verifyDriver(driver.id, status, status === 'rejected' ? reason.trim() || undefined : undefined),
+    onSuccess: () => {
+      setReason('');
+      queryClient.invalidateQueries({ queryKey: ['adminDirectory'] });
+    }
+  });
   const equipment = Array.isArray(driver.equipment) ? driver.equipment : [];
   const documents = Array.isArray(driver.documents) ? driver.documents : [];
   return (
@@ -242,6 +252,46 @@ function DriverDetail({ driver }: { driver: AdminDriver }) {
       {driver.rejection_reason && (
         <Field label="Rejection reason" value={driver.rejection_reason} />
       )}
+      <div className="border-t border-[#E4DCC4] pt-3 space-y-2">
+        <div className="uppercase font-bold text-[#5B6168] text-[0.68rem]">Review decision</div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={decide.isPending || driver.verification_status === 'verified'}
+            onClick={() => decide.mutate('verified')}
+            className="px-3 py-2 bg-[#0F5132] text-white font-bold uppercase border-2 border-[#14171A] disabled:opacity-40"
+          >
+            Approve
+          </button>
+          <input
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Rejection reason (optional)"
+            className="p-2 bg-[#FAFAF7] border border-[#E4DCC4] flex-1 min-w-[12rem]"
+          />
+          <button
+            type="button"
+            disabled={decide.isPending || driver.verification_status === 'rejected'}
+            onClick={() => decide.mutate('rejected')}
+            className="px-3 py-2 bg-[#8C2F1B] text-white font-bold uppercase border-2 border-[#14171A] disabled:opacity-40"
+          >
+            Reject
+          </button>
+          {driver.verification_status !== 'pending' && (
+            <button
+              type="button"
+              disabled={decide.isPending}
+              onClick={() => decide.mutate('pending')}
+              className="px-3 py-2 bg-[#FAFAF7] font-bold uppercase border-2 border-[#14171A] disabled:opacity-40"
+            >
+              Reset to pending
+            </button>
+          )}
+        </div>
+        {decide.error && (
+          <p className="text-[#8C2F1B]">{decide.error instanceof Error ? decide.error.message : 'Could not save the decision.'}</p>
+        )}
+      </div>
       <div>
         <div className="uppercase font-bold text-[#5B6168] text-[0.68rem] mb-1">Equipment</div>
         {equipment.length === 0 ? (

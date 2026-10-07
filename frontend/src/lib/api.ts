@@ -293,6 +293,15 @@ export const api = {
     return handleResponse<{ drivers: AdminDriver[]; shippers: AdminShipper[] }>(res);
   },
 
+  async verifyDriver(id: string, status: 'verified' | 'rejected' | 'pending', rejection_reason?: string): Promise<void> {
+    const res = await fetch(`${API_BASE}/admin/drivers/${id}/verify`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify({ status, rejection_reason })
+    });
+    await handleResponse<{ success: boolean }>(res);
+  },
+
   async getAdminLedger(): Promise<any[]> {
     const res = await fetch(`${API_BASE}/admin/ledger`, {
       headers: getAuthHeaders()
