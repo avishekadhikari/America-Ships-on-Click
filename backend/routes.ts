@@ -1294,8 +1294,8 @@ apiRouter.patch('/admin/drivers/:id/verify', authenticate, requireRole('admin'),
     const dbx = scoped(req);
     const result = await dbx.query(`
       UPDATE driver_profiles
-      SET verification_status = $1,
-          verified_at = CASE WHEN $1 = 'verified' THEN CURRENT_TIMESTAMP ELSE NULL END,
+      SET verification_status = $1::text::verification_status,
+          verified_at = CASE WHEN $1::text = 'verified' THEN CURRENT_TIMESTAMP ELSE NULL END,
           rejection_reason = $2
       WHERE id = $3
       RETURNING id, full_name, verification_status, verified_at, rejection_reason
